@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f1115">
+<title>Scrim Control · Co-host</title>
+<style>
+  :root { color-scheme: dark; --bg: #0f1115; --card: #181b22; --line: #2a2f3a; --text: #eef0f3; --muted: #9aa3ae;
+          --ok: #2ecc71; --warn: #ffb020; --bad: #ff4d4d; --a: #e53935; --b: #1e88e5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+         padding: 16px max(16px, env(safe-area-inset-left)) 32px; max-width: 560px; margin-inline: auto; }
+  h1 { font-size: 18px; margin: 0 0 12px; letter-spacing: .02em; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  input { width: 100%; font: inherit; font-size: 22px; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+          background: #0b0d11; color: var(--text); text-align: center; letter-spacing: .3em; }
+  input.name { letter-spacing: normal; font-size: 18px; }
+  button { font: inherit; font-weight: 650; border: 0; border-radius: 12px; padding: 16px 10px; min-height: 58px;
+           background: #262b35; color: var(--text); cursor: pointer; touch-action: manipulation; }
+  button:active { transform: scale(.97); filter: brightness(1.2); }
+  button:disabled { opacity: .45; }
+  .full { width: 100%; margin-top: 10px; background: var(--b); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .big { background: #2d3442; }
+  .team { color: #fff; }
+  .panic { background: var(--bad); color: #fff; }
+  .score { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .score .t { flex: 1; text-align: center; }
+  .score .tag { font-size: 20px; font-weight: 800; }
+  .score .num { font-size: 40px; font-weight: 800; line-height: 1.1; }
+  .score .vs { color: var(--muted); }
+  .side { font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--bad); }
+  .dot.on { background: var(--ok); }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .bar button { min-height: 0; padding: 6px 10px; font-size: 13px; font-weight: 500; background: transparent; color: var(--muted); }
+  #log { margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  #log li { padding: 3px 0; border-top: 1px solid var(--line); }
+  #log li:first-child { border-top: 0; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #262b35; padding: 10px 16px;
+           border-radius: 10px; max-width: 90vw; text-align: center; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { background: var(--bad); }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<section id="pinScreen" hidden>
+  <h1>Scrim Control · Co-host</h1>
+  <div class="card">
+    <p class="muted">Enter the 6-digit PIN from the host.</p>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+    <button class="full" id="pinGo">Unlock</button>
+    <p class="muted" id="pinMsg"></p>
+  </div>
+</section>
+
+<section id="nameScreen" hidden>
+  <h1>Scrim Control · Co-host</h1>
+  <div class="card">
+    <p class="muted">Your name (shows in the host's log next to every button you press).</p>
+    <input id="name" class="name" maxlength="24" placeholder="e.g. Ken">
+    <button class="full" id="nameGo">Continue</button>
+  </div>
+</section>
+
+<section id="main" hidden>
+  <div class="bar">
+    <h1 style="margin:0">Scrim Control</h1>
+    <span class="muted"><span class="dot" id="dot"></span><span id="conn">…</span></span>
+  </div>
+
+  <div class="card">
+    <div class="muted" id="mapLine">—</div>
+    <div class="score" style="margin-top:6px">
+      <div class="t"><div class="tag" id="tagA">A</div><div class="num" id="numA">0</div><div class="side" id="sideA"></div></div>
+      <div class="vs">vs</div>
+      <div class="t"><div class="tag" id="tagB">B</div><div class="num" id="numB">0</div><div class="side" id="sideB"></div></div>
+    </div>
+    <div class="muted" style="margin-top:8px">On screen: <b id="onScreen">nothing</b></div>
+  </div>
+
+  <div class="card">
+    <h2>Screens</h2>
+    <div class="grid">
+      <button class="big" data-cmd="Recap">Recap</button>
+      <button class="big" data-cmd="Highlights">Highlights</button>
+      <button class="big" data-cmd="Play replay">Play replay</button>
+      <button class="big" data-cmd="Save replay">Save replay</button>
+      <button data-cmd="Stop full-screen">Stop</button>
+      <button data-cmd="Scoreboard on/off" id="sbBtn">Scoreboard</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Score (press when the STREAM shows it)</h2>
+    <div class="grid">
+      <button class="team" id="roundA" data-cmd="Round" data-team="A">Round → A</button>
+      <button class="team" id="roundB" data-cmd="Round" data-team="B">Round → B</button>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <div class="grid">
+        <button data-cmd="Score" data-team="A" data-delta="1" id="plusA">A +1</button>
+        <button data-cmd="Score" data-team="A" data-delta="-1" id="minusA">A −1</button>
+      </div>
+      <div class="grid">
+        <button data-cmd="Score" data-team="B" data-delta="1" id="plusB">B +1</button>
+        <button data-cmd="Score" data-team="B" data-delta="-1" id="minusB">B −1</button>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <button data-cmd="Undo" data-confirm="Undo the last action?">Undo</button>
+      <button class="panic" data-cmd="PANIC" data-confirm="PANIC: clear the whole overlay and hide the scoreboard?">PANIC</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Last actions</h2>
+    <ul id="log"></ul>
+  </div>
+
+  <p class="muted" style="text-align:center"><span id="who"></span> · <button id="logout" style="min-height:0;padding:4px 8px;font-size:13px;background:transparent;color:var(--muted)">Change PIN / name</button></p>
+</section>
+
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+  // Co-host page (docs/future-cohost-app.md in the Scrim Overlay project). Talks ONLY to Supabase functions:
+  // scrim_state(pin) and scrim_command(pin, who, name, payload). The PIN is checked there (bcrypt hash), never here.
+  const $ = id => document.getElementById(id);
+  const C = window.SCRIM || {};
+  const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+                  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+                  del: k => { try { localStorage.removeItem(k); } catch {} } };
+  let pin = store.get('scrimPin'), who = store.get('scrimName'), last = null, timer = null;
+
+  const ERR = { wrong: 'Wrong PIN.', locked: 'Too many wrong PINs. Wait 10 minutes.', 'remote off': 'Remote is OFF on the host\'s PC.',
+                'pc offline': 'The host\'s PC is offline (overlay not running).', 'too fast': 'Too many presses. Slow down.',
+                'not allowed': 'That button is not allowed.' };
+
+  async function rpc(fn, body) {
+    const r = await fetch(`${C.url}/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(body),
+      headers: { apikey: C.anonKey, Authorization: `Bearer ${C.anonKey}`, 'Content-Type': 'application/json' } });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
+    return r.json();
+  }
+
+  function toast(text, bad) {
+    const t = $('toast'); t.textContent = text; t.className = 'show' + (bad ? ' bad' : '');
+    clearTimeout(toast.t); toast.t = setTimeout(() => (t.className = ''), 2600);
+  }
+
+  function show(id) { for (const s of ['pinScreen', 'nameScreen', 'main']) $(s).hidden = s !== id; }
+
+  function start() {
+    if (!C.url || !C.anonKey) { show('pinScreen'); $('pinMsg').textContent = 'This page is not set up yet (config.js).'; return; }
+    if (!pin) return show('pinScreen');
+    if (!who) return show('nameScreen');
+    show('main'); $('who').textContent = `You are ${who}`;
+    poll(); clearInterval(timer); timer = setInterval(poll, 2000);
+  }
+
+  $('pinGo').onclick = async () => {
+    const p = $('pin').value.trim();
+    if (!/^\d{6}$/.test(p)) return ($('pinMsg').textContent = 'The PIN has 6 digits.');
+    $('pinGo').disabled = true; $('pinMsg').textContent = 'Checking…';
+    try {
+      const r = await rpc('scrim_state', { pin: p });
+      if (!r.ok) { $('pinMsg').textContent = ERR[r.error] || r.error; return; }
+      pin = p; store.set('scrimPin', p); $('pinMsg').textContent = ''; start();
+    } catch (e) { $('pinMsg').textContent = 'No connection: ' + e.message; }
+    finally { $('pinGo').disabled = false; }
+  };
+  $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('pinGo').click(); });
+  $('nameGo').onclick = () => {
+    const n = $('name').value.trim().slice(0, 24);
+    if (!n) return toast('Type your name first', true);
+    who = n; store.set('scrimName', n); start();
+  };
+  $('name').addEventListener('keydown', e => { if (e.key === 'Enter') $('nameGo').click(); });
+  $('logout').onclick = () => { clearInterval(timer); pin = null; who = null; store.del('scrimPin'); store.del('scrimName'); $('pin').value = ''; start(); };
+
+  async function poll() {
+    try {
+      const r = await rpc('scrim_state', { pin });
+      if (!r.ok) {
+        if (r.error === 'wrong') { clearInterval(timer); pin = null; store.del('scrimPin'); show('pinScreen'); $('pinMsg').textContent = 'The PIN changed. Ask the host for the new one.'; return; }
+        return setConn(false, ERR[r.error] || r.error);
+      }
+      const fresh = r.age < 15;
+      setConn(fresh && r.state.remote, !fresh ? 'Host PC offline' : r.state.remote ? 'Connected' : 'Remote OFF');
+      draw(r.state);
+    } catch { setConn(false, 'No internet'); }
+  }
+
+  function setConn(ok, text) { $('dot').className = 'dot' + (ok ? ' on' : ''); $('conn').textContent = text; }
+
+  function draw(s) {
+    if (!s || !s.teams) return;
+    last = s;
+    const T = s.teams, m = s.map;
+    $('tagA').textContent = T.A.tag; $('tagB').textContent = T.B.tag;
+    $('tagA').style.color = T.A.color; $('tagB').style.color = T.B.color;
+    $('numA').textContent = m ? m.score.A : 0; $('numB').textContent = m ? m.score.B : 0;
+    $('sideA').textContent = m ? (m.atk === 'A' ? 'ATTACK' : 'DEFENSE') : ''; $('sideB').textContent = m ? (m.atk === 'B' ? 'ATTACK' : 'DEFENSE') : '';
+    $('mapLine').textContent = m ? `Map ${m.slot}: ${m.name} · Maps won ${T.A.tag} ${s.won.A} – ${s.won.B} ${T.B.tag}` + (s.delaySec ? ` · stream delay ${s.delaySec}s` : '') : '—';
+    $('onScreen').textContent = s.onScreen || 'nothing';
+    $('sbBtn').textContent = s.scoreboard ? 'Scoreboard: ON' : 'Scoreboard: OFF';
+    for (const t of ['A', 'B']) {
+      $('round' + t).textContent = `Round → ${T[t].tag}`; $('round' + t).style.background = T[t].color;
+      $('plus' + t).textContent = `${T[t].tag} +1`; $('minus' + t).textContent = `${T[t].tag} −1`;
+    }
+    $('log').innerHTML = '';
+    for (const e of s.log || []) {
+      const li = document.createElement('li');
+      li.textContent = `${new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}  ${e.text}`;
+      $('log').appendChild(li);
+    }
+  }
+
+  document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', async () => {
+    if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
+    const payload = {};
+    if (b.dataset.team) payload.team = b.dataset.team;
+    if (b.dataset.delta) payload.delta = +b.dataset.delta;
+    b.disabled = true;
+    try {
+      const r = await rpc('scrim_command', { pin, who, name: b.dataset.cmd, payload });
+      if (!r.ok) toast(ERR[r.error] || r.error, true);
+      else toast(`${b.textContent}: sent`);
+      setTimeout(poll, 1200);
+    } catch (e) { toast('No connection: ' + e.message, true); }
+    finally { setTimeout(() => (b.disabled = false), 600); }
+  }));
+
+  start();
+</script>
+</body>
+</html>
