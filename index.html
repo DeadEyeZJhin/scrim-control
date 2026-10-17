@@ -34,6 +34,15 @@
   #rsBox .rsin { width: 100%; max-width: 420px; padding: 18px; border-radius: 14px; background: #1a1d24; border: 1px solid var(--bad); }
   #rsBox h3 { margin: 0 0 8px; color: #ff8a8a; } #rsBox p { margin: 0 0 12px; line-height: 1.4; }
   #rsBox .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  #mvBox { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; background: rgba(0,0,0,.72); }
+  #mvBox[hidden] { display: none; }
+  #mvBox .mvin { width: 100%; max-width: 520px; padding: 16px; border-radius: 14px; background: #1a1d24; border: 1px solid var(--line); }
+  #mvBox h3 { margin: 0 0 6px; } #mvBox h4 { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; opacity: .75; }
+  .mvchips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .mvchips button { min-height: 40px; padding: 4px; font-size: 14px; }
+  .mvchips button.on { box-shadow: inset 0 0 0 2px #ffd23f; }
+  #mvBox .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .mvp { color: #ffd23f; }
   .score { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .score .t { flex: 1; text-align: center; }
   .score .tag { font-size: 20px; font-weight: 800; }
@@ -165,6 +174,15 @@
       <button class="reset" data-reset="New series">New series (all maps 0 – 0)</button>
     </div>
   </div>
+
+  <div id="mvBox" hidden><div class="mvin">
+    <h3 id="mvTitle">MVP</h3><div id="mvNow" style="opacity:.8"></div>
+    <h4>Team</h4><div class="mvchips" id="mvTeams"></div>
+    <h4>Player</h4><div class="mvchips" id="mvNames"></div>
+    <input id="mvType" maxlength="24" placeholder="Or type the name" style="margin-top:6px">
+    <h4>Character</h4><div class="mvchips" id="mvHeroes"></div>
+    <div class="row"><button id="mvNo">Cancel</button><button id="mvDel">Remove</button><button class="plus" id="mvGo" style="background:#1f9d55">Save MVP</button></div>
+  </div></div>
 
   <div id="rsBox" hidden><div class="rsin">
     <h3 id="rsTitle">Warning</h3><p id="rsText"></p>
@@ -338,9 +356,10 @@
     const pool = s.pool || [], T = s.teams;
     $('maps').innerHTML = s.maps.map(m => {
       const pic = pool.includes(m.name) ? `<img src="${MAPPIC(m.name)}" alt="">` : '<div class="noimg"></div>';
-      const res = m.won ? `${esc(T[m.won].tag)} won ${m.score.A}–${m.score.B}` : (m.score.A || m.score.B) ? `${m.score.A}–${m.score.B}` : 'not played';
+      const res = (m.won ? `${esc(T[m.won].tag)} won ${m.score.A}–${m.score.B}` : (m.score.A || m.score.B) ? `${m.score.A}–${m.score.B}` : 'not played')
+        + (m.mvp ? ` · <span class="mvp">🏅 ${esc(m.mvp.player)}${m.mvp.hero ? ' · ' + esc(heroName(m.mvp.hero)) : ''}</span>` : '');
       return `<div class="maprow${m.current ? ' cur' : ''}">${pic}<div><div class="mt">Map ${m.slot}: ${esc(m.name)}${m.current ? ' · CURRENT' : ''}</div><div class="ms">${res}</div></div>
-        <div class="mb"><button data-map="cur" data-slot="${m.slot}">Set current</button><button data-map="start" data-slot="${m.slot}">Start</button>
+        <div class="mb"><button data-map="cur" data-slot="${m.slot}">Set current</button><button data-map="start" data-slot="${m.slot}">Start</button><button data-map="mvp" data-slot="${m.slot}">🏅 MVP</button>
           <select data-slot="${m.slot}"><option value="">Change map…</option>${pool.map(n => `<option>${esc(n)}</option>`).join('')}</select></div></div>`;
     }).join('');
   }
@@ -348,6 +367,7 @@
     const b = e.target.closest('button[data-map]'); if (!b) return;
     const slot = +b.dataset.slot;
     if (b.dataset.map === 'cur') send('Current map', { slot }, `Map ${slot} current`);
+    if (b.dataset.map === 'mvp') openMvp(slot);
     if (b.dataset.map === 'start' && confirm(`Start map ${slot} now (random side)? Its score goes back to 0-0.`)) send('Start map', { slot, atk: 'random' }, `Start map ${slot}`);
   });
   $('maps').addEventListener('change', e => {
@@ -355,6 +375,39 @@
     send('Map', { slot: +sel.dataset.slot, name: sel.value }, `Map ${sel.dataset.slot} = ${sel.value}`);
     sel.value = '';
   });
+  // MVP of a map (2026-10-17, user's call: co-hosts help with the MVP): team, player (the host's locked names, or
+  // typed) and character. The PC cleans the name and matches it to the closest locked name.
+  const heroName = k => (((last && last.guess && last.guess.heroes) || []).find(h => h.key === k) || {}).name || k;
+  let mv = null;
+  function openMvp(slot) {
+    const m = (last.maps || []).find(x => x.slot === slot); if (!m) return;
+    mv = { slot, team: m.won || (m.mvp && m.mvp.team) || 'A', player: m.mvp ? m.mvp.player : '', hero: m.mvp ? m.mvp.hero : null };
+    $('mvTitle').textContent = `🏅 MVP · Map ${slot}: ${m.name}`;
+    $('mvNow').textContent = m.mvp ? `Now: ${m.mvp.player}${m.mvp.hero ? ' · ' + heroName(m.mvp.hero) : ''}` : 'No MVP yet for this map.';
+    $('mvDel').disabled = !m.mvp; $('mvType').value = '';
+    drawMvp(); $('mvBox').hidden = false;
+  }
+  function drawMvp() {
+    const T = last.teams, names = ((last.roster || {})[mv.team]) || [];
+    $('mvTeams').innerHTML = ['A', 'B'].map(t => `<button data-team="${t}" class="${mv.team === t ? 'on' : ''}">${esc(T[t].tag)}</button>`).join('');
+    $('mvNames').innerHTML = names.map(n => `<button data-name="${esc(n)}" class="${mv.player === n ? 'on' : ''}">${esc(n)}</button>`).join('') || '<span style="opacity:.7">No locked names yet: type it below.</span>';
+    $('mvHeroes').innerHTML = ((last.guess && last.guess.heroes) || []).map(h => `<button data-hero="${esc(h.key)}" class="${mv.hero === h.key ? 'on' : ''}">${esc(h.name)}</button>`).join('');
+  }
+  $('mvBox').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !mv) return;
+    if (b.dataset.team) { mv.team = b.dataset.team; mv.player = ''; drawMvp(); }
+    if (b.dataset.name) { mv.player = b.dataset.name; $('mvType').value = ''; drawMvp(); }
+    if (b.dataset.hero) { mv.hero = mv.hero === b.dataset.hero ? null : b.dataset.hero; drawMvp(); }
+  });
+  $('mvNo').onclick = () => { $('mvBox').hidden = true; mv = null; };
+  $('mvDel').onclick = () => { if (!mv || !confirm('Remove the MVP of this map?')) return; send('MVP', { slot: mv.slot, clear: true }, 'MVP removed'); $('mvBox').hidden = true; mv = null; };
+  $('mvGo').onclick = () => {
+    const player = $('mvType').value.trim() || mv.player;
+    if (!player) return toast('Pick or type the player', true);
+    send('MVP', { slot: mv.slot, team: mv.team, player, hero: mv.hero || null }, `MVP Map ${mv.slot}: ${player}`);
+    $('mvBox').hidden = true; mv = null;
+  };
+
   function drawPool(s) {
     if (!s.pool || !changed('pool', [s.pool, (s.maps || []).length])) return;
     const n = (s.maps || []).length || 5;
