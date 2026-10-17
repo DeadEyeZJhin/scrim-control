@@ -61,6 +61,14 @@
   .maprow .mb { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 6px; }
   .maprow .mb button, .maprow .mb select { min-height: 40px; padding: 6px; font-size: 14px; }
   select { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: #262b35; color: var(--text); }
+  .ggrow { grid-column: span 2; display: flex; gap: 8px; } .ggrow [data-cmd] { flex: 1; } #ggSet { flex: 0 0 64px; font-size: 22px; }
+  #ggSet.on { box-shadow: inset 0 0 0 2px #ffd23f; }
+  #ggPick { grid-column: span 2; } #ggPick h3 { margin: 10px 0 6px; font-size: 13px; text-transform: uppercase; opacity: .75; }
+  .ggnow { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+  .gggrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .gggrid button { min-height: 40px; padding: 4px; font-size: 14px; }
+  .gggrid button.on { box-shadow: inset 0 0 0 2px #ffd23f; }
+  .gggrid img { display: block; width: 100%; aspect-ratio: 299 / 140; object-fit: cover; border-radius: 6px; margin-bottom: 3px; }
   .pool { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .pool .pt { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .pool img { display: block; width: 100%; aspect-ratio: 299 / 140; object-fit: cover; }
@@ -120,7 +128,13 @@
       <button class="big" data-cmd="Highlights">Highlights</button>
       <button class="big" data-cmd="Play replay">Play replay</button>
       <button class="big" data-cmd="Save replay">Save replay</button>
-      <button class="big" data-cmd="Guess Game on/off" style="grid-column: span 2">Guess Game on/off</button>
+      <div class="ggrow"><button class="big" data-cmd="Guess Game on/off">Guess Game on/off</button><button class="big" id="ggSet" title="Choose the next Runner or Map to guess">⚙</button></div>
+      <div id="ggPick" hidden>
+        <div class="ggnow"><span id="ggNow">Next guess: random</span><button id="ggClear" hidden>✕ Clear</button></div>
+        <div style="opacity:.7;font-size:14px">Tap one: it is the next guess (now if the Guess Game is on, else when it next comes up). After it, random again.</div>
+        <h3>Runners</h3><div class="gggrid" id="ggHeroes"></div>
+        <h3>Maps</h3><div class="gggrid" id="ggMaps"></div>
+      </div>
       <button data-cmd="Stop full-screen">Stop</button>
       <button data-cmd="Scoreboard on/off" id="sbBtn">Scoreboard</button>
     </div>
@@ -264,7 +278,7 @@
       $('plus' + t).textContent = `${T[t].tag} +1`; $('plus' + t).style.background = T[t].color;
       $('minus' + t).textContent = `${T[t].tag} −1`;
     }
-    drawTeams(s); drawMaps(s); drawPool(s); drawClips(s);
+    drawTeams(s); drawMaps(s); drawPool(s); drawClips(s); drawGuess(s);
     $('log').innerHTML = '';
     for (const e of s.log || []) {
       const li = document.createElement('li');
@@ -336,6 +350,25 @@
   $('pool').addEventListener('click', e => {
     const b = e.target.closest('button[data-pool]'); if (!b) return;
     send('Map', { slot: +b.dataset.slot, name: b.dataset.pool }, `Map ${b.dataset.slot} = ${b.dataset.pool}`);
+  });
+
+  // Guess Game manual pick (2026-10-17): ⚙ opens the chooser; the PC plays it as the next guess, then random again.
+  function drawGuess(s) {
+    const G = s.guess; if (!G) return;
+    const p = G.pick;
+    $('ggNow').innerHTML = !p ? 'Next guess: random' : `Next guess: <b>${esc(p.name)}</b> · ${p.ready ? 'next round on screen' : 'waits for the Guess Game'}`;
+    $('ggClear').hidden = !p; $('ggSet').classList.toggle('on', !!p);
+    if (changed('guess', [G.heroes, s.pool])) {
+      $('ggHeroes').innerHTML = (G.heroes || []).map(h => `<button data-kind="hero" data-key="${esc(h.key)}" data-name="${esc(h.name)}">${esc(h.name)}</button>`).join('');
+      $('ggMaps').innerHTML = (s.pool || []).map(n => `<button data-kind="map" data-key="${esc(n)}" data-name="${esc(n)}"><img src="${MAPPIC(n)}" alt="">${esc(n)}</button>`).join('');
+    }
+    document.querySelectorAll('.gggrid [data-kind]').forEach(b => b.classList.toggle('on', !!p && b.dataset.kind === p.kind && b.dataset.key === p.key));
+  }
+  $('ggSet').onclick = () => { $('ggPick').hidden = !$('ggPick').hidden; };
+  $('ggClear').onclick = () => send('Guess pick', { clear: true }, 'Next guess random');
+  $('ggPick').addEventListener('click', e => {
+    const b = e.target.closest('button[data-kind]'); if (!b) return;
+    send('Guess pick', { kind: b.dataset.kind, key: b.dataset.key }, `Next guess ${b.dataset.name}`);
   });
 
   // Replays: thumbnails come from Supabase (scrim_thumbs), fetched once per clip, asked again later if missing.
