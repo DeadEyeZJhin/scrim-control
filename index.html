@@ -47,6 +47,33 @@
   #toast.bad { background: var(--bad); }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
   [hidden] { display: none !important; }
+  .teamcol { display: grid; gap: 8px; }
+  .plus { font-size: 22px; min-height: 70px; color: #fff; }
+  .minus { min-height: 44px; padding: 8px; font-size: 15px; }
+  .tedit { display: grid; grid-template-columns: 1fr 90px; gap: 8px; margin-bottom: 8px; }
+  .tedit input { font-size: 16px; padding: 10px; letter-spacing: normal; text-align: left; }
+  .tedit .lbl { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+  .maprow { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .maprow:first-child { border-top: 0; }
+  .maprow img, .maprow .noimg { width: 96px; height: 45px; object-fit: cover; border-radius: 6px; background: #0b0d11; }
+  .maprow.cur { background: linear-gradient(90deg, rgba(46,204,113,.12), transparent); border-radius: 8px; }
+  .maprow .mt { font-weight: 700; } .maprow .ms { font-size: 13px; color: var(--muted); }
+  .maprow .mb { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 6px; }
+  .maprow .mb button, .maprow .mb select { min-height: 40px; padding: 6px; font-size: 14px; }
+  select { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: #262b35; color: var(--text); }
+  .pool { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pool .pt { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .pool img { display: block; width: 100%; aspect-ratio: 299 / 140; object-fit: cover; }
+  .pool .pn { font-weight: 700; padding: 6px 8px 0; }
+  .pool .ps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 6px 8px 8px; }
+  .pool .ps button { min-height: 34px; padding: 4px 0; font-size: 14px; }
+  .clips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .clipc { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0b0d11; }
+  .clipc .th { position: relative; aspect-ratio: 16 / 9; background: #000; }
+  .clipc .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .clipc .th span { position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 5px; background: rgba(0,0,0,.75); font-size: 12px; font-weight: 700; }
+  .clipc .th .star { left: auto; right: 6px; top: 6px; bottom: auto; color: #ffcc33; }
+  .clipc button { width: 100%; min-height: 42px; border-radius: 0; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -102,23 +129,42 @@
   <div class="card">
     <h2>Score (press when the STREAM shows it)</h2>
     <div class="grid">
-      <button class="team" id="roundA" data-cmd="Round" data-team="A">Round → A</button>
-      <button class="team" id="roundB" data-cmd="Round" data-team="B">Round → B</button>
-    </div>
-    <div class="grid" style="margin-top:10px">
-      <div class="grid">
-        <button data-cmd="Score" data-team="A" data-delta="1" id="plusA">A +1</button>
-        <button data-cmd="Score" data-team="A" data-delta="-1" id="minusA">A −1</button>
+      <div class="teamcol">
+        <button class="plus" data-cmd="Round" data-team="A" id="plusA" title="Round won: banner, side swap, Map Winner">A +1</button>
+        <button class="minus" data-cmd="Score" data-team="A" data-delta="-1" id="minusA" title="Silent fix">A −1</button>
       </div>
-      <div class="grid">
-        <button data-cmd="Score" data-team="B" data-delta="1" id="plusB">B +1</button>
-        <button data-cmd="Score" data-team="B" data-delta="-1" id="minusB">B −1</button>
+      <div class="teamcol">
+        <button class="plus" data-cmd="Round" data-team="B" id="plusB" title="Round won: banner, side swap, Map Winner">B +1</button>
+        <button class="minus" data-cmd="Score" data-team="B" data-delta="-1" id="minusB" title="Silent fix">B −1</button>
       </div>
     </div>
     <div class="grid" style="margin-top:10px">
       <button data-cmd="Undo" data-confirm="Undo the last action?">Undo</button>
       <button class="panic" data-cmd="PANIC" data-confirm="PANIC: clear the whole overlay and hide the scoreboard?">PANIC</button>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>Teams</h2>
+    <div class="tedit"><span class="lbl" id="tlA">Team A (left on its DEF side)</span><input class="name" id="tnA" maxlength="40" placeholder="Team name"><input class="name" id="ttA" maxlength="5" placeholder="TAG"></div>
+    <div class="tedit"><span class="lbl" id="tlB">Team B</span><input class="name" id="tnB" maxlength="40" placeholder="Team name"><input class="name" id="ttB" maxlength="5" placeholder="TAG"></div>
+    <div class="grid"><button id="saveA">Save team A</button><button id="saveB">Save team B</button></div>
+    <p class="muted" style="margin:8px 0 0">Logos and colors stay on the host's PC.</p>
+  </div>
+
+  <div class="card">
+    <h2>Maps</h2>
+    <div id="maps"></div>
+  </div>
+
+  <div class="card">
+    <h2>Map pool (tap a number = put that map in that slot)</h2>
+    <div class="pool" id="pool"></div>
+  </div>
+
+  <div class="card">
+    <h2>Replays (tap Play = on stream)</h2>
+    <div class="clips" id="clips"></div>
   </div>
 
   <div class="card">
@@ -215,9 +261,10 @@
     $('onScreen').textContent = s.onScreen || 'nothing';
     $('sbBtn').textContent = s.scoreboard ? 'Scoreboard: ON' : 'Scoreboard: OFF';
     for (const t of ['A', 'B']) {
-      $('round' + t).textContent = `Round → ${T[t].tag}`; $('round' + t).style.background = T[t].color;
-      $('plus' + t).textContent = `${T[t].tag} +1`; $('minus' + t).textContent = `${T[t].tag} −1`;
+      $('plus' + t).textContent = `${T[t].tag} +1`; $('plus' + t).style.background = T[t].color;
+      $('minus' + t).textContent = `${T[t].tag} −1`;
     }
+    drawTeams(s); drawMaps(s); drawPool(s); drawClips(s);
     $('log').innerHTML = '';
     for (const e of s.log || []) {
       const li = document.createElement('li');
@@ -225,6 +272,96 @@
       $('log').appendChild(li);
     }
   }
+
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const MAPPIC = n => `maps/${encodeURIComponent(n)}.png`;
+  async function send(name, payload, label) {
+    try {
+      const r = await rpc('scrim_command', { pin, who, name, payload });
+      if (!r.ok) toast(ERR[r.error] || r.error, true); else toast(`${label}: sent`);
+      setTimeout(poll, 1200);
+    } catch (e) { toast('No connection: ' + e.message, true); }
+  }
+
+  // Teams: the boxes only refill when you are not typing in them.
+  function drawTeams(s) {
+    const F = s.teamsFull; if (!F) return;
+    for (const t of ['A', 'B']) {
+      if (document.activeElement !== $('tn' + t) && !$('tn' + t).dataset.dirty) $('tn' + t).value = F[t].name;
+      if (document.activeElement !== $('tt' + t) && !$('tt' + t).dataset.dirty) $('tt' + t).value = F[t].tag;
+      $('tl' + t).textContent = `Team ${t}: ${F[t].tag}`;
+    }
+  }
+  for (const t of ['A', 'B']) {
+    for (const k of ['tn', 'tt']) $(k + t).addEventListener('input', () => ($(k + t).dataset.dirty = '1'));
+    $('save' + t).onclick = () => {
+      const name = $('tn' + t).value.trim(), tag = $('tt' + t).value.trim().toUpperCase();
+      if (!name && !tag) return toast('Type a name or a tag', true);
+      delete $('tn' + t).dataset.dirty; delete $('tt' + t).dataset.dirty;
+      send('Team', { team: t, name, tag }, `Team ${t}`);
+    };
+  }
+
+  // Maps + map pool + clips: redrawn only when they change (a redraw would close an open picker).
+  const sig = {};
+  const changed = (k, v) => { const j = JSON.stringify(v); if (sig[k] === j) return false; sig[k] = j; return true; };
+  function drawMaps(s) {
+    if (!s.maps || !changed('maps', [s.maps, s.pool, s.teams])) return;
+    const pool = s.pool || [], T = s.teams;
+    $('maps').innerHTML = s.maps.map(m => {
+      const pic = pool.includes(m.name) ? `<img src="${MAPPIC(m.name)}" alt="">` : '<div class="noimg"></div>';
+      const res = m.won ? `${esc(T[m.won].tag)} won ${m.score.A}–${m.score.B}` : (m.score.A || m.score.B) ? `${m.score.A}–${m.score.B}` : 'not played';
+      return `<div class="maprow${m.current ? ' cur' : ''}">${pic}<div><div class="mt">Map ${m.slot}: ${esc(m.name)}${m.current ? ' · CURRENT' : ''}</div><div class="ms">${res}</div></div>
+        <div class="mb"><button data-map="cur" data-slot="${m.slot}">Set current</button><button data-map="start" data-slot="${m.slot}">Start</button>
+          <select data-slot="${m.slot}"><option value="">Change map…</option>${pool.map(n => `<option>${esc(n)}</option>`).join('')}</select></div></div>`;
+    }).join('');
+  }
+  $('maps').addEventListener('click', e => {
+    const b = e.target.closest('button[data-map]'); if (!b) return;
+    const slot = +b.dataset.slot;
+    if (b.dataset.map === 'cur') send('Current map', { slot }, `Map ${slot} current`);
+    if (b.dataset.map === 'start' && confirm(`Start map ${slot} now (random side)? Its score goes back to 0-0.`)) send('Start map', { slot, atk: 'random' }, `Start map ${slot}`);
+  });
+  $('maps').addEventListener('change', e => {
+    const sel = e.target.closest('select'); if (!sel || !sel.value) return;
+    send('Map', { slot: +sel.dataset.slot, name: sel.value }, `Map ${sel.dataset.slot} = ${sel.value}`);
+    sel.value = '';
+  });
+  function drawPool(s) {
+    if (!s.pool || !changed('pool', [s.pool, (s.maps || []).length])) return;
+    const n = (s.maps || []).length || 5;
+    $('pool').innerHTML = s.pool.map(name => `<div class="pt"><img src="${MAPPIC(name)}" alt=""><div class="pn">${esc(name)}</div>
+      <div class="ps">${Array.from({ length: n }, (_, i) => `<button data-pool="${esc(name)}" data-slot="${i + 1}">${i + 1}</button>`).join('')}</div></div>`).join('');
+  }
+  $('pool').addEventListener('click', e => {
+    const b = e.target.closest('button[data-pool]'); if (!b) return;
+    send('Map', { slot: +b.dataset.slot, name: b.dataset.pool }, `Map ${b.dataset.slot} = ${b.dataset.pool}`);
+  });
+
+  // Replays: thumbnails come from Supabase (scrim_thumbs), fetched once per clip, asked again later if missing.
+  const thumbs = {}; let thumbAsk = 0;
+  async function fetchThumbs(ids) {
+    const need = ids.filter(id => !thumbs[id]);
+    if (!need.length || Date.now() - thumbAsk < 8000) return;
+    thumbAsk = Date.now();
+    try {
+      const r = await rpc('scrim_thumbs', { pin, ids: need.slice(0, 40) });
+      if (r.ok && r.thumbs) { Object.assign(thumbs, r.thumbs); sig.clips = null; if (last) drawClips(last); }
+    } catch {}
+  }
+  function drawClips(s) {
+    const list = s.clips || [];
+    fetchThumbs(list.map(c => c.id));
+    if (!changed('clips', [list, Object.keys(thumbs).length, s.teams])) return;
+    const T = s.teams;
+    $('clips').innerHTML = list.length ? list.map(c => `<div class="clipc"><div class="th">${thumbs[c.id] ? `<img src="data:image/jpeg;base64,${thumbs[c.id]}" alt="">` : ''}
+        <span>Map ${c.slot || '?'} · R${c.round}${c.team && T[c.team] ? ' · ' + esc(T[c.team].tag) : ''}</span>${c.star ? '<span class="star">★</span>' : ''}</div>
+        <button data-clip="${esc(c.id)}">Play</button></div>`).join('') : '<p class="muted">No replays yet.</p>';
+  }
+  $('clips').addEventListener('click', e => {
+    const b = e.target.closest('button[data-clip]'); if (!b) return;
+    send('Play clip', { id: b.dataset.clip }, 'Play replay');
+  });
 
   document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
