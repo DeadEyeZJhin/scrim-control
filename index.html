@@ -28,6 +28,12 @@
   .big { background: #2d3442; }
   .team { color: #fff; }
   .panic { background: var(--bad); color: #fff; }
+  .reset { background: transparent; color: #ff8a8a; border: 1px solid var(--bad); }
+  #rsBox { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.72); }
+  #rsBox[hidden] { display: none; }
+  #rsBox .rsin { width: 100%; max-width: 420px; padding: 18px; border-radius: 14px; background: #1a1d24; border: 1px solid var(--bad); }
+  #rsBox h3 { margin: 0 0 8px; color: #ff8a8a; } #rsBox p { margin: 0 0 12px; line-height: 1.4; }
+  #rsBox .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .score { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .score .t { flex: 1; text-align: center; }
   .score .tag { font-size: 20px; font-weight: 800; }
@@ -155,8 +161,16 @@
     <div class="grid" style="margin-top:10px">
       <button data-cmd="Undo" data-confirm="Undo the last action?">Undo</button>
       <button class="panic" data-cmd="PANIC" data-confirm="PANIC: clear the whole overlay and hide the scoreboard?">PANIC</button>
+      <button class="reset" data-reset="Reset map">Reset this map to 0 – 0</button>
+      <button class="reset" data-reset="New series">New series (all maps 0 – 0)</button>
     </div>
   </div>
+
+  <div id="rsBox" hidden><div class="rsin">
+    <h3 id="rsTitle">Warning</h3><p id="rsText"></p>
+    <input id="rsPin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="Reset PIN">
+    <div class="row"><button id="rsNo">Cancel</button><button class="panic" id="rsGo">Yes, reset</button></div>
+  </div></div>
 
   <div class="card">
     <h2>Teams</h2>
@@ -204,7 +218,7 @@
 
   const ERR = { wrong: 'Wrong PIN.', locked: 'Too many wrong PINs. Wait 10 minutes.', 'remote off': 'Remote is OFF on the host\'s PC.',
                 'pc offline': 'The host\'s PC is offline (overlay not running).', 'too fast': 'Too many presses. Slow down.',
-                'not allowed': 'That button is not allowed.' };
+                'not allowed': 'That button is not allowed.', 'wrong reset pin': 'Wrong reset PIN.' };
 
   async function rpc(fn, body) {
     const r = await fetch(`${C.url}/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(body),
@@ -395,6 +409,26 @@
     const b = e.target.closest('button[data-clip]'); if (!b) return;
     send('Play clip', { id: b.dataset.clip }, 'Play replay');
   });
+
+  // Reset this map / New series (2026-10-17, user's call): a warning + the separate RESET PIN (checked in Supabase only,
+  // never stored here). Undo on the host's PC can bring the scores back.
+  const RS = {
+    'Reset map': ['Reset this map?', 'The CURRENT map goes back to 0 – 0. Only press this if the score is wrong.'],
+    'New series': ['Start a NEW SERIES?', 'EVERY map goes back to 0 – 0, and MVPs, saved picks and old replay clips are cleared. Only press this before a new scrim.'],
+  };
+  let rsName = null;
+  document.querySelectorAll('[data-reset]').forEach(b => b.addEventListener('click', () => {
+    rsName = b.dataset.reset;
+    $('rsTitle').textContent = '⚠ ' + RS[rsName][0]; $('rsText').textContent = RS[rsName][1];
+    $('rsPin').value = ''; $('rsBox').hidden = false; $('rsPin').focus();
+  }));
+  $('rsNo').onclick = () => { $('rsBox').hidden = true; $('rsPin').value = ''; };
+  $('rsGo').onclick = () => {
+    const code = $('rsPin').value.trim();
+    if (!/^[0-9]{6}$/.test(code)) return toast('Type the 6-digit reset PIN', true);
+    $('rsBox').hidden = true; $('rsPin').value = '';
+    send(rsName, { confirm: code }, RS[rsName][0].replace('?', ''));
+  };
 
   document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', async () => {
     if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
