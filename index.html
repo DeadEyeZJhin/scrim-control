@@ -75,6 +75,8 @@
   .maprow .mt { font-weight: 700; } .maprow .ms { font-size: 13px; color: var(--muted); }
   .maprow .mb { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 6px; }
   .maprow .mb button, .maprow .mb select { min-height: 40px; padding: 6px; font-size: 14px; }
+  .maprow .mb .flip { grid-column: 1 / -1; background: #5a4300; border-color: #a57c00; color: #ffe08a; font-weight: 700; }
+  .maprow .warnline { grid-column: 1 / -1; color: #ff8a80; font-weight: 700; font-size: 14px; }
   select { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: #262b35; color: var(--text); }
   .ggrow { grid-column: span 2; display: flex; gap: 8px; } .ggrow [data-cmd] { flex: 1; } #ggSet { flex: 0 0 64px; font-size: 22px; }
   #ggSet.on { box-shadow: inset 0 0 0 2px #ffd23f; }
@@ -352,20 +354,29 @@
   const sig = {};
   const changed = (k, v) => { const j = JSON.stringify(v); if (sig[k] === j) return false; sig[k] = j; return true; };
   function drawMaps(s) {
-    if (!s.maps || !changed('maps', [s.maps, s.pool, s.teams])) return;
+    if (!s.maps || !changed('maps', [s.maps, s.pool, s.teams, s.warn])) return;
     const pool = s.pool || [], T = s.teams;
     $('maps').innerHTML = s.maps.map(m => {
       const pic = pool.includes(m.name) ? `<img src="${MAPPIC(m.name)}" alt="">` : '<div class="noimg"></div>';
       const res = (m.won ? `${esc(T[m.won].tag)} won ${m.score.A}–${m.score.B}` : (m.score.A || m.score.B) ? `${m.score.A}–${m.score.B}` : 'not played')
         + (m.mvp ? ` · <span class="mvp">🏅 ${esc(m.mvp.player)}${m.mvp.hero ? ' · ' + esc(heroName(m.mvp.hero)) : ''}</span>` : '');
       return `<div class="maprow${m.current ? ' cur' : ''}">${pic}<div><div class="mt">Map ${m.slot}: ${esc(m.name)}${m.current ? ' · CURRENT' : ''}</div><div class="ms">${res}</div></div>
-        <div class="mb"><button data-map="cur" data-slot="${m.slot}">Set current</button><button data-map="start" data-slot="${m.slot}">Start</button><button data-map="mvp" data-slot="${m.slot}">🏅 MVP</button>
+        ${warnOf(s, m)}<div class="mb"><button data-map="cur" data-slot="${m.slot}">Set current</button><button data-map="start" data-slot="${m.slot}">Start</button><button data-map="mvp" data-slot="${m.slot}">🏅 MVP</button>${m.won ? `<button data-map="flip" data-slot="${m.slot}" class="flip">⇄ Wrong winner</button>` : ''}
           <select data-slot="${m.slot}"><option value="">Change map…</option>${pool.map(n => `<option>${esc(n)}</option>`).join('')}</select></div></div>`;
     }).join('');
   }
+  // Wrong winner (2026-10-20): the sides were wrong all map, so the other team got it. The host's PC turns the score round.
+  const warnOf = (s, m) => (s.warn && s.warn.slot === m.slot ? `<div class="warnline">⚠ ${esc(s.warn.text)}</div>` : '');
   $('maps').addEventListener('click', e => {
     const b = e.target.closest('button[data-map]'); if (!b) return;
     const slot = +b.dataset.slot;
+    if (b.dataset.map === 'flip') {
+      const m = (last.maps || []).find(x => x.slot === slot), T = last.teams;
+      if (m && m.won) { const w = m.won, o = w === 'A' ? 'B' : 'A';
+        if (confirm(`Map ${slot} (${m.name}) is now ${T[w].tag} ${m.score[w]} – ${m.score[o]} ${T[o].tag}.
+
+Wrong winner? Give it to ${T[o].tag}? Undo brings it back.`)) send('Wrong winner', { slot }, `Map ${slot} given to ${T[o].tag}`); }
+    }
     if (b.dataset.map === 'cur') send('Current map', { slot }, `Map ${slot} current`);
     if (b.dataset.map === 'mvp') openMvp(slot);
     if (b.dataset.map === 'start' && confirm(`Start map ${slot} now (random side)? Its score goes back to 0-0.`)) send('Start map', { slot, atk: 'random' }, `Start map ${slot}`);
