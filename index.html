@@ -115,6 +115,18 @@
   .pnrow { padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; } .pnrow:first-child { border-top: 0; }
   .pnrow .acts { margin-left: auto; display: flex; gap: 4px; } .pnrow select { min-height: 38px; font-size: 14px; }
   .new { color: #ffcc33; font-size: 13px; } .okc { color: var(--ok); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs button { flex: 1; min-height: 44px; padding: 8px; font-size: 15px; background: #1d2129; color: var(--muted); }
+  .tabs button.on { background: #2d3442; color: var(--text); box-shadow: inset 0 -3px 0 var(--b); }
+  .clrow { border-top: 1px solid var(--line); } .clrow:first-child { border-top: 0; }
+  .clhead { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
+  .clhead .cn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cllogo { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 8px; background: #0b0d11 center / contain no-repeat;
+            display: grid; place-items: center; font-size: 11px; font-weight: 800; color: var(--muted); }
+  .clbody { padding: 0 0 12px; display: grid; gap: 8px; }
+  .clbody .tedit { margin: 0; } .clbody textarea { width: 100%; min-height: 64px; font: inherit; font-size: 15px; padding: 8px; border-radius: 10px;
+            border: 1px solid var(--line); background: #0b0d11; color: var(--text); }
+  .filebtn { display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; background: #262b35; cursor: pointer; font-weight: 650; }
 </style>
 </head>
 <body>
@@ -143,6 +155,22 @@
     <h1 style="margin:0">Scrim Control</h1>
     <span class="muted"><span class="dot" id="dot"></span><span id="conn">…</span></span>
   </div>
+  <div class="tabs"><button id="tabMain" class="on">Scrim</button><button id="tabClans">Clans</button></div>
+
+  <div id="paneClans" hidden>
+  <div class="card">
+    <h2>Clans</h2>
+    <p class="muted" style="margin:0 0 8px">The host's clan list. Every player here is a name the screen reader knows. Tap a clan to edit it. Clans can't be deleted here.</p>
+    <div class="pnadd"><input id="clFind" placeholder="Search clans or players…"><button class="sm" id="clNew">＋ New clan</button></div>
+    <div id="clNewBox" class="tedit" style="margin-top:8px" hidden>
+      <input class="name" id="clNewName" maxlength="40" placeholder="Clan name"><input class="name" id="clNewTag" maxlength="5" placeholder="TAG">
+      <button id="clNewGo" style="grid-column:1/-1">Create clan</button>
+    </div>
+    <div id="clList" style="margin-top:8px"></div>
+  </div>
+  </div>
+
+  <div id="paneMain">
 
   <div class="card">
     <div class="muted" id="mapLine">—</div>
@@ -246,6 +274,7 @@
     <h2>Last actions</h2>
     <ul id="log"></ul>
   </div>
+  </div>
 
   <p class="muted" style="text-align:center"><span id="who"></span> · <button id="logout" style="min-height:0;padding:4px 8px;font-size:13px;background:transparent;color:var(--muted)">Change PIN / name</button></p>
 </section>
@@ -265,7 +294,8 @@
 
   const ERR = { wrong: 'Wrong PIN.', locked: 'Too many wrong PINs. Wait 10 minutes.', 'remote off': 'Remote is OFF on the host\'s PC.',
                 'pc offline': 'The host\'s PC is offline (overlay not running).', 'too fast': 'Too many presses. Slow down.',
-                'not allowed': 'That button is not allowed.', 'wrong reset pin': 'Wrong reset PIN.' };
+                'not allowed': 'That button is not allowed.', 'wrong reset pin': 'Wrong reset PIN.',
+                'bad logo': 'That picture is too big or not a picture.' };
 
   async function rpc(fn, body) {
     const r = await fetch(`${C.url}/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(body),
@@ -339,7 +369,7 @@
       $('plus' + t).textContent = `${T[t].tag} +1`; $('plus' + t).style.background = T[t].color;
       $('minus' + t).textContent = `${T[t].tag} −1`;
     }
-    drawTeams(s); drawClanPick(s); drawNames(s); drawMaps(s); drawPool(s); drawClips(s); drawGuess(s);
+    drawTeams(s); drawClanPick(s); drawNames(s); drawClans(s); drawMaps(s); drawPool(s); drawClips(s); drawGuess(s);
     $('log').innerHTML = '';
     for (const e of s.log || []) {
       const li = document.createElement('li');
@@ -379,7 +409,7 @@
 
   // Pick clan + Player names (2026-10-21, user's call): the same buttons as the host's Control. Clans and names come from
   // the host's PC; nothing here is redrawn while a box or list in it is in use.
-  const busyIn = el => el.contains(document.activeElement) && /^(INPUT|SELECT)$/.test(document.activeElement.tagName);
+  const busyIn = el => el.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
   const key = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const clansSorted = s => (s.clans || []).slice().sort((a, b) => (a.tag || a.name).localeCompare(b.tag || b.name));
   const clanOfTeam = (s, t) => { const T = s.teams[t], C = s.clans || [];
@@ -401,7 +431,7 @@
   let pnHidden = new Set(); try { pnHidden = new Set(JSON.parse(store.get('pnHidden') || '[]')); } catch {}
   function drawNames(s) {
     if (!s.roster || !s.teams) return;
-    const all = [...new Set([...(s.known || []), ...(s.roster.A || []), ...(s.roster.B || [])])].sort((a, b) => a.localeCompare(b)), ks = all.join('|');
+    const all = [...new Set([...(s.clans || []).flatMap(c => c.players || []), ...(s.roster.A || []), ...(s.roster.B || [])])].sort((a, b) => a.localeCompare(b)), ks = all.join('|');
     if ($('pnKnown')._ks !== ks) { $('pnKnown')._ks = ks; $('pnKnown').innerHTML = all.map(n => `<option value="${esc(n)}">`).join(''); }
     if (!pnEdit && !busyIn($('pnTeams')) && changed('pnTeams', [s.roster, s.teams, s.clans])) $('pnTeams').innerHTML = ['A', 'B'].map(t => {
       const T = s.teams[t], R = s.roster[t] || [], cl = clanOfTeam(s, t);
@@ -486,6 +516,112 @@
       return close();
     }
   });
+  // Clans tab (2026-10-21, user's call): co-hosts help fill the host's Clans list: new clan, name / tag, players, logo.
+  // Clans are never deleted from here. A logo is too big for a press: it goes up through scrim_logo_put.
+  let clOpen = null, clEdit = false;
+  function setTab(cl) {
+    $('paneClans').hidden = !cl; $('paneMain').hidden = cl;
+    $('tabClans').classList.toggle('on', cl); $('tabMain').classList.toggle('on', !cl);
+    if (cl && last) { sig.clans = null; drawClans(last); }
+  }
+  $('tabMain').onclick = () => setTab(false); $('tabClans').onclick = () => setTab(true);
+  const logoPic = c => (c.logo && thumbs[c.logo] ? thumbs[c.logo] : null);
+  function drawClans(s) {
+    if ($('paneClans').hidden || !s.clans || clEdit || busyIn($('clList'))) return;
+    const f = $('clFind').value.trim().toLowerCase();
+    if (!changed('clans', [s.clans, f, clOpen, Object.keys(thumbs).length])) return;
+    const list = clansSorted(s).filter(c => !f || `${c.tag} ${c.name} ${(c.players || []).join(' ')}`.toLowerCase().includes(f));
+    $('clList').innerHTML = list.map(c => {
+      const open = c.id === clOpen, pic = logoPic(c), tag = esc(c.tag || 'TAG');
+      return `<div class="clrow" data-id="${esc(c.id)}">
+      <div class="clhead" data-cl="open"><span class="cllogo"${pic ? ` style="background-image:url(data:image/png;base64,${pic})"` : ''}>${pic ? '' : esc((c.tag || c.name).slice(0, 4))}</span>
+        <span class="cn"><b>${esc(c.tag || '—')}</b> <span class="muted">${esc(c.name)} · ${c.n} player${c.n === 1 ? '' : 's'}</span></span><span class="muted">${open ? '▾' : '▸'}</span></div>
+      ${open ? `<div class="clbody">
+        <div class="tedit"><input class="name" data-f="name" maxlength="40" value="${esc(c.name)}" placeholder="Clan name"><input class="name" data-f="tag" maxlength="5" value="${esc(c.tag)}" placeholder="TAG">
+          <button class="sm" data-cl="save" style="grid-column:1/-1">Save name / tag</button></div>
+        <label class="filebtn sm">🖼 ${c.logo ? 'Change logo' : 'Upload logo'}<input type="file" accept="image/png,image/jpeg,image/webp" data-cl="logo" hidden></label>
+        <div class="pnchips">${(c.players || []).map(n => `<span class="chip"><button data-cl="pedit" data-n="${esc(n)}" title="Tap to fix this name">${esc(n)}</button><button data-cl="pdel" data-n="${esc(n)}" title="Remove">✕</button></span>`).join('') || '<span class="muted">No players yet</span>'}</div>
+        <textarea data-f="add" placeholder="Add players: ${tag}.Name, ${tag}.Other (commas or new lines = several)"></textarea>
+        <button class="sm" data-cl="padd">Add players</button></div>` : ''}</div>`;
+    }).join('') || '<p class="muted">No clans match.</p>';
+  }
+  $('clFind').addEventListener('input', () => last && drawClans(last));
+  $('clNew').onclick = () => { $('clNewBox').hidden = !$('clNewBox').hidden; if (!$('clNewBox').hidden) $('clNewName').focus(); };
+  $('clNewGo').onclick = () => {
+    const name = $('clNewName').value.trim(), tag = $('clNewTag').value.trim().toUpperCase();
+    if (!name && !tag) return toast('Type a clan name or a tag', true);
+    if (tag && ((last && last.clans) || []).some(c => key(c.tag) === key(tag))) return toast(`Tag ${tag} is already used by another clan`, true);
+    send('Clan', { name, tag }, `New clan ${tag || name}`);
+    $('clNewName').value = ''; $('clNewTag').value = ''; $('clNewBox').hidden = true;
+  };
+  $('clList').addEventListener('click', async e => {
+    const b = e.target.closest('[data-cl]'); if (!b || !last || b.matches('input')) return;
+    const row = b.closest('.clrow'), c = (last.clans || []).find(x => x.id === row.dataset.id); if (!c) return;
+    const op = b.dataset.cl, n = b.dataset.n, T = c.tag || c.name;
+    const redraw = () => { clEdit = false; sig.clans = null; drawClans(last); };
+    if (op === 'open') { clOpen = clOpen === c.id ? null : c.id; return redraw(); }
+    if (op === 'save') {
+      const name = row.querySelector('[data-f=name]').value.trim(), tag = row.querySelector('[data-f=tag]').value.trim().toUpperCase();
+      if (!name && !tag) return toast('Type a clan name or a tag', true);
+      return send('Clan', { id: c.id, name, tag }, `Clan ${tag || name}`);
+    }
+    if (op === 'padd') {
+      const box = row.querySelector('[data-f=add]'), names = box.value.split(/[,\n]+/).map(x => x.trim().slice(0, 24)).filter(Boolean);
+      if (!names.length) return toast('Type at least one name', true);
+      box.value = '';
+      // A press holds about 250 characters: a long list goes in a few presses.
+      const chunks = [[]];
+      for (const x of names) { const cur = chunks[chunks.length - 1]; if (cur.length >= 20 || JSON.stringify([...cur, x]).length > 220) chunks.push([x]); else cur.push(x); }
+      for (const [i, ch] of chunks.entries()) {
+        if (i) await new Promise(r => setTimeout(r, 700));
+        await send('Clan player', { clan: c.id, op: 'add', names: ch }, `${T}: ${ch.length} player${ch.length > 1 ? 's' : ''} added`);
+      }
+      return;
+    }
+    if (op === 'pdel' && confirm(`Remove ${n} from ${T}?`)) send('Clan player', { clan: c.id, op: 'del', name: n }, `Removed ${n}`);
+    if (op === 'pedit') {
+      clEdit = true;
+      const chip = b.closest('.chip');
+      chip.innerHTML = `<input maxlength="24" value="${esc(n)}"><button data-cl="peditok" data-n="${esc(n)}">✓</button><button data-cl="peditno">✕</button>`;
+      const inp = chip.querySelector('input'); inp.focus(); inp.select();
+      return;
+    }
+    if (op === 'peditno') return redraw();
+    if (op === 'peditok') {
+      const to = b.closest('.chip').querySelector('input').value.trim();
+      if (to && to !== n) send('Clan player', { clan: c.id, op: 'edit', name: n, to }, `${n} → ${to}`);
+      return redraw();
+    }
+  });
+  $('clList').addEventListener('keydown', e => {
+    if (e.target.tagName !== 'INPUT') return;
+    const box = e.target.parentNode;
+    if (e.key === 'Enter') (box.querySelector('[data-cl=peditok]') || box.parentNode.querySelector('[data-cl=save]') || { click() {} }).click();
+    if (e.key === 'Escape' && box.querySelector('[data-cl=peditno]')) box.querySelector('[data-cl=peditno]').click();
+  });
+  $('clList').addEventListener('change', async e => {
+    if (!e.target.matches('[data-cl=logo]')) return;
+    const f = e.target.files[0], row = e.target.closest('.clrow');
+    e.target.value = '';
+    if (!f || !row) return;
+    try {
+      const r = await rpc('scrim_logo_put', { pin, who, clan: row.dataset.id, data: await shrinkLogo(f) });
+      if (!r.ok) return toast(ERR[r.error] || r.error, true);
+      toast('Logo sent: the host\'s PC saves it in a few seconds');
+    } catch { toast('Could not read that picture', true); }
+  });
+  // Logo: max 256 px, WebP (keeps see-through parts; PNG where the browser cannot make WebP).
+  async function shrinkLogo(f) {
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(f); });
+    const k = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.naturalWidth * k)), height: Math.max(1, Math.round(img.naturalHeight * k)) });
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(img.src);
+    let url = c.toDataURL('image/webp', 0.9);
+    if (!url.startsWith('data:image/webp')) url = c.toDataURL('image/png');
+    return url.split(',')[1];
+  }
+
   $('pnSeen').addEventListener('change', e => { const row = e.target.closest('.pnrow'); if (row && e.target.matches('[data-clan]')) pnPicked[row.dataset.n] = e.target.value; });
   $('pnSeen').addEventListener('keydown', e => {
     if (e.target.tagName !== 'INPUT') return;
@@ -601,12 +737,12 @@ Wrong winner? Give it to ${T[o].tag}? Undo brings it back.`)) send('Wrong winner
     thumbAsk = Date.now();
     try {
       const r = await rpc('scrim_thumbs', { pin, ids: need.slice(0, 40) });
-      if (r.ok && r.thumbs) { Object.assign(thumbs, r.thumbs); sig.clips = null; if (last) drawClips(last); }
+      if (r.ok && r.thumbs) { Object.assign(thumbs, r.thumbs); sig.clips = null; sig.clans = null; if (last) { drawClips(last); drawClans(last); } }
     } catch {}
   }
   function drawClips(s) {
     const list = s.clips || [];
-    fetchThumbs(list.map(c => c.id));
+    fetchThumbs([...list.map(c => c.id), ...(s.clans || []).map(c => c.logo).filter(Boolean)]); // clip pictures + clan logos
     if (!changed('clips', [list, Object.keys(thumbs).length, s.teams])) return;
     const T = s.teams;
     $('clips').innerHTML = list.length ? list.map(c => `<div class="clipc"><div class="th">${thumbs[c.id] ? `<img src="data:image/jpeg;base64,${thumbs[c.id]}" alt="">` : '<i class="wait">Loading picture…</i>'}
