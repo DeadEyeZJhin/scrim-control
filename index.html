@@ -446,7 +446,7 @@
   $('pnTeams').addEventListener('click', e => {
     const b = e.target.closest('button[data-pn]'); if (!b || !last) return;
     const t = b.closest('[data-team]').dataset.team, T = last.teams[t], op = b.dataset.pn, n = b.dataset.n;
-    const redraw = () => { pnEdit = false; sig.pnTeams = null; drawNames(last); };
+    const redraw = () => { document.activeElement.blur(); pnEdit = false; sig.pnTeams = null; drawNames(last); };
     if (op === 'edit') {
       pnEdit = true;
       const chip = b.closest('.chip');
@@ -494,7 +494,7 @@
   }
   $('pnSeen').addEventListener('click', e => {
     const b = e.target.closest('button[data-pn]'); if (!b || !last) return;
-    const close = () => { pnFix = false; sig.pnSeen = null; drawSeen(last); };
+    const close = () => { document.activeElement.blur(); pnFix = false; sig.pnSeen = null; drawSeen(last); };
     if (b.dataset.pn === 'known') { pnOpenKnown = !pnOpenKnown; return close(); }
     const row = b.closest('.pnrow'), n = row.dataset.n;
     if (b.dataset.pn === 'hide') { pnHidden.add(n); store.set('pnHidden', JSON.stringify([...pnHidden].slice(-300))); return close(); }
@@ -558,17 +558,18 @@
     const b = e.target.closest('[data-cl]'); if (!b || !last || b.matches('input')) return;
     const row = b.closest('.clrow'), c = (last.clans || []).find(x => x.id === row.dataset.id); if (!c) return;
     const op = b.dataset.cl, n = b.dataset.n, T = c.tag || c.name;
-    const redraw = () => { clEdit = false; sig.clans = null; drawClans(last); };
+    const redraw = () => { document.activeElement.blur(); clEdit = false; sig.clans = null; drawClans(last); };
     if (op === 'open') { clOpen = clOpen === c.id ? null : c.id; return redraw(); }
     if (op === 'save') {
       const name = row.querySelector('[data-f=name]').value.trim(), tag = row.querySelector('[data-f=tag]').value.trim().toUpperCase();
       if (!name && !tag) return toast('Type a clan name or a tag', true);
+      document.activeElement.blur();
       return send('Clan', { id: c.id, name, tag }, `Clan ${tag || name}`);
     }
     if (op === 'padd') {
       const box = row.querySelector('[data-f=add]'), names = box.value.split(/[,\n]+/).map(x => x.trim().slice(0, 24)).filter(Boolean);
       if (!names.length) return toast('Type at least one name', true);
-      box.value = '';
+      box.value = ''; box.blur();
       // A press holds about 250 characters: a long list goes in a few presses.
       const chunks = [[]];
       for (const x of names) { const cur = chunks[chunks.length - 1]; if (cur.length >= 20 || JSON.stringify([...cur, x]).length > 220) chunks.push([x]); else cur.push(x); }
