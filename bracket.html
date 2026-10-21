@@ -107,6 +107,8 @@ svg.arrows circle.w{fill:var(--green)}svg.arrows circle.l{fill:var(--red)}svg.ar
 .slot.res{margin:8px 10px 0;background:color-mix(in srgb,var(--gc) 15%,transparent);border-color:var(--gc)}
 .slot.champ{height:54px;border-color:var(--gold);background:rgba(255,176,32,.14);box-shadow:0 0 16px rgba(255,176,32,.5)}
 .slot.champ .name{font-size:18px}
+.champbox{position:relative}
+.champbox .note{position:absolute;top:100%;left:0;right:0;margin-top:8px;text-align:center}
 .logo{width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.04));font-weight:900;font-size:14px;color:#cfe0ff}
 .logo img{width:100%;height:100%;object-fit:contain}
 .name{flex:1;min-width:0;font-weight:700;font-size:15px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -297,9 +299,9 @@ function buildElim(B, ctx, entries, pre, kind){
   const fin = U[k - 1][0];
   if(kind === 'single'){
     if(B.opt.third && k >= 2){ const sf = U[k - 2]; out.third = mk(B, ctx, pre + 'T', L_(sf[0]), L_(sf[1]), {}); }
-    out.champ = fin.o.w; out.runner = fin.o.l; return out;
+    out.champ = fin.o.w; out.runner = fin.o.l; out.final = fin; return out;
   }
-  if(k < 2){ out.champ = fin.o.w; return out; }
+  if(k < 2){ out.champ = fin.o.w; out.final = fin; return out; }
   let curR = [];
   for(let i = 0; i < U[0].length / 2; i++) curR.push(mk(B, ctx, pre + 'L1-' + (i + 1), L_(U[0][2 * i]), L_(U[0][2 * i + 1]), {}));
   out.L.push(curR);
@@ -315,8 +317,8 @@ function buildElim(B, ctx, entries, pre, kind){
   out.gf.push(g1);
   if(B.opt.reset && g1.o.w != null && g1.o.w === g1.b && g1.b !== BYE){
     const g2 = mk(B, ctx, pre + 'GF2', {s:g1.a, hint:''}, {s:g1.b, hint:''}, {}); g2.srcA = g2.srcB = g1; out.gf.push(g2);
-    out.champ = g2.o.w; out.runner = g2.o.l;
-  } else { out.champ = g1.o.w; out.runner = g1.o.l; }
+    out.champ = g2.o.w; out.runner = g2.o.l; out.final = g2;
+  } else { out.champ = g1.o.w; out.runner = g1.o.l; out.final = g1; }
   return out;
 }
 /* stats + ranking with tie-break rules */
@@ -468,36 +470,43 @@ function treeSection(B, title, cls, rounds, names, extraCols){
   (extraCols || []).forEach(c => tree.append(c));
   return h('div', {class:'sec'}, title ? h('h2', {}, title) : null, tree);
 }
-function champCol(B, champ, runner){
-  return h('div', {class:'tcol'}, h('div', {class:'colh'}, '🏆 CHAMPION'), h('div', {class:'tbody'},
-    h('div', {class:'slot champ' + (champ == null ? ' empty' : '')}, logoEl(B, champ), champ == null ? h('div', {class:'name'}, 'TBD') : teamLine(B, champ)),
-    runner != null && runner !== BYE ? h('div', {class:'note', style:'text-align:center'}, '2nd: ' + tname(B, runner)) : null));
+// Champion box level with its final (the column centers one box), "2nd" right under it, and the final's winner line
+// running into it (user 2026-10-21: it floated above the final with no line). The final's card is made later, so the
+// link reads it when the lines are drawn.
+function champCol(B, champ, runner, fin){
+  const slot = h('div', {class:'slot champ' + (champ == null ? ' empty' : '')}, logoEl(B, champ), champ == null ? h('div', {class:'name'}, 'TBD') : teamLine(B, champ));
+  if(fin && champ != null && champ !== BYE) links.push({get from(){ return fin.card; }, get fromSlot(){ return fin.el && fin.el[fin.o.w === fin.a ? 0 : 1]; }, to:slot, cls:'w'});
+  return h('div', {class:'tcol'}, h('div', {class:'colh'}, '🏆 CHAMPION'), h('div', {class:'tbody'}, h('div', {class:'champbox'}, slot,
+    runner != null && runner !== BYE ? h('div', {class:'note'}, '2nd: ' + tname(B, runner)) : null)));
 }
 function elimSections(B, ctx, entries, pre, kind, titlePrefix){
   const E = buildElim(B, ctx, entries, pre, kind), out = [];
   const P = entries.length, names = E.U.map((_, i) => roundName(P / Math.pow(2, i), i, E.U.length));
   if(kind === 'single'){
-    out.push(treeSection(B, titlePrefix, 'cyan', E.U, names, [champCol(B, E.champ, E.runner)]));
+    out.push(treeSection(B, titlePrefix, 'cyan', E.U, names, [champCol(B, E.champ, E.runner, E.final)]));
     if(E.third) out.push(h('div', {class:'sec'}, h('h2', {}, '3rd place match'), h('div', {class:'tree cyan'}, h('div', {class:'tcol'}, h('div', {class:'tbody'}, matchEl(B, E.third))))));
   } else {
     names[names.length - 1] = 'Upper final';
+    // Empty columns first so the grand final stands to the RIGHT of the lower final (user 2026-10-21: same column = the
+    // line from the lower final shot straight up across the page).
+    const pad = Array.from({length:Math.max(0, E.L.length - E.U.length)}, () => h('div', {class:'tcol'}, h('div', {class:'colh'}, ''), h('div', {class:'tbody'})));
     const gfCols = E.gf.map((m, i) => h('div', {class:'tcol gold'}, h('div', {class:'colh'}, i ? 'GRAND FINAL (RESET)' : 'GRAND FINAL'), h('div', {class:'tbody'}, matchEl(B, m))));
-    out.push(treeSection(B, (titlePrefix ? titlePrefix + ' · ' : '') + 'Upper bracket', 'blue', E.U, names, gfCols.concat([champCol(B, E.champ, E.runner)])));
+    out.push(treeSection(B, (titlePrefix ? titlePrefix + ' · ' : '') + 'Upper bracket', 'blue', E.U, names, pad.concat(gfCols, [champCol(B, E.champ, E.runner, E.final)])));
     if(E.L.length) out.push(treeSection(B, 'Lower bracket · lose twice = out', 'red', E.L, E.L.map((_, i) => i === E.L.length - 1 ? 'Lower final' : 'Lower R' + (i + 1))));
   }
   treeLinks(ctx.all.filter(m => m.id.indexOf(pre) === 0));
   return {secs:out, E:E};
 }
 function standingsTable(B, order, T, mark, stageKey){
-  const tb = order.some(o => o.tie);
+  const tb = order.some(o => o.tie), buch = !/^rr/.test(stageKey); // round robin: everyone meets everyone, Buchholz says nothing
   return h('table', {class:'st'},
-    h('thead', {}, h('tr', {}, ['#', 'TEAM', 'W', 'L', '+/-', 'BUCH', ''].map(x => h('th', {}, x)))),
+    h('thead', {}, h('tr', {}, ['#', 'TEAM', 'W', 'L', '+/-', buch ? 'BUCH' : null, ''].filter(x => x != null).map(x => h('th', {}, x)))),
     h('tbody', {}, order.map((o, i) => { const t = T[o.s], mk2 = mark(o.s, i);
       const first = o.tie && o.tie[0] === o.s && !B.tbs.some(x => x.stage === stageKey && x.seats.join() === o.tie.join());
       return h('tr', {class:mk2 === 'q' ? 'q' : mk2 === 'e' ? 'e' : ''},
         h('td', {class:'n'}, i + 1), h('td', {}, h('div', {class:'tm'}, logoEl(B, o.s), tname(B, o.s))),
         h('td', {class:'n'}, t.w), h('td', {class:'n'}, t.l), h('td', {class:'n'}, (t.sf - t.sa > 0 ? '+' : '') + (t.sf - t.sa)),
-        h('td', {class:'n'}, t.opp.reduce((a, x) => a + (T[x] ? T[x].w - T[x].l : 0), 0)),
+        buch ? h('td', {class:'n'}, t.opp.reduce((a, x) => a + (T[x] ? T[x].w - T[x].l : 0), 0)) : null,
         h('td', {}, mk2 === 'q' ? h('span', {class:'chip q'}, typeof mark.label === 'function' ? mark.label(o.s) : 'QUALIFIED') : mk2 === 'e' ? h('span', {class:'chip e'}, 'ELIMINATED') : null,
           first ? h('button', {class:'chip t', type:'button', title:'These teams are still tied after every tie-break rule. Adds tie-breaker match(es) between them.',
             onclick:() => { B.tbs.push({id:uid().slice(-5), stage:stageKey, seats:o.tie.slice()}); touch(); renderBracket(); }}, '⚖ TIE – add tie-breaker') : (o.tie ? h('span', {class:'chip t', title:'Tied: order decided by seed'}, '⚖ tied') : null)));
@@ -517,7 +526,9 @@ function renderSwiss(B, ctx, n){
   const linkTo = (s, el, r) => { const p = pos[s]; if(p && p.r === r - 1) links.push({from:p.card, fromSlot:p.el, to:el, cls:p.won ? 'w' : 'l'}); };
   R.rounds.forEach((rd, i) => {
     const col = h('div', {class:'col'}, h('div', {class:'colh'}, 'ROUND ' + rd.r));
-    if(i > 0){ const prevFin = R.rounds[i - 1].fin; addFinished(col, prevFin, rd.r); }
+    // QUALIFIED on top, this round's matches, ELIMINATED at the bottom (user's call 2026-10-21).
+    const prevFin = i > 0 ? R.rounds[i - 1].fin : [];
+    addFinished(col, prevFin.filter(f => f.q), rd.r);
     const groups = {};
     rd.ms.forEach(m => { (groups[m.rec] = groups[m.rec] || []).push(m); });
     Object.keys(groups).sort((a, b) => { const [aw, al] = a.split('-').map(Number), [bw, bl] = b.split('-').map(Number); return (bw - aw) || (al - bl); }).forEach(k => {
@@ -527,11 +538,14 @@ function renderSwiss(B, ctx, n){
           pos[s] = {r:rd.r, card:c, el:m.el[sd], won:m.o.w === s}; });
         return c; }))));
     });
+    addFinished(col, prevFin.filter(f => !f.q), rd.r);
     cols.append(col);
   });
   function addFinished(col, fin, r){
     const by = {}; fin.forEach(f => (by[f.w + '-' + f.l] = by[f.w + '-' + f.l] || []).push(f));
-    Object.keys(by).sort().reverse().forEach(k => { const q = by[k][0].q;
+    // Best record first: 3-0 before 3-1, 2-3 before 0-3; qualified before eliminated (the FINAL column has both).
+    const rec = k => k.split('-').map(Number);
+    Object.keys(by).sort((a, b) => (!!by[b][0].q - !!by[a][0].q) || (rec(b)[0] - rec(a)[0]) || (rec(a)[1] - rec(b)[1])).forEach(k => { const q = by[k][0].q;
       col.append(h('section', {class:'group ' + (q ? 'green' : 'red')}, h('h3', {}, k, h('small', {}, q ? 'QUALIFIED' : 'ELIMINATED')),
         h('div', {class:'gbody'}, by[k].map(f => { const el = h('div', {class:'slot res'}, logoEl(B, f.s), teamLine(B, f.s)); linkTo(f.s, el, r); return el; })))); });
   }
@@ -652,7 +666,7 @@ function renderPanel(){
   const B = cur(), o = B.opt, el = $('#panel'), folded = {}; el.querySelectorAll('.card').forEach(c => folded[c.dataset.k] = c.classList.contains('fold'));
   const card = (k, title, sub, ...kids) => h('section', {class:'card' + (folded[k] ? ' fold' : ''), 'data-k':k}, h('h2', {onclick:e => e.currentTarget.parentNode.classList.toggle('fold')}, title, sub ? h('small', {}, sub) : null), ...kids);
   const fmt = h('div', {class:'prow'},
-    opt('Format', sel(B.format, Object.entries(FORMATS), v => { B.format = v; changed(); })),
+    opt('Format', sel(B.format, Object.entries(FORMATS), v => { B.format = v; changed(); renderList(); })), // the bracket list names the format
     h('div', {class:'grp'}, h('span', {class:'note'}, 'Teams'), [4, 8, 16, 32].map(x => h('button', {class:'btn sm' + (B.count === x ? ' on' : ''), type:'button', onclick:() => setCount(B, x)}, x)), numIn(B.count, 2, MAXT, x => setCount(B, x))));
   const fo = h('div', {class:'prow'});
   const pairsSel = () => opt('Round 1 pairs', sel(o.seeding, [['listed', 'As listed (1 vs 2, 3 vs 4)'], ['seeded', 'By seed (top vs bottom)']], v => { o.seeding = v; changed(); }));
