@@ -101,6 +101,20 @@
   .clipc .th .wait { position: absolute; inset: 0; display: grid; place-items: center; color: #8a93a6; font-size: 12px; font-style: normal; background: linear-gradient(90deg, #0b0d11, #1a1f29, #0b0d11); background-size: 200% 100%; animation: thwait 1.4s linear infinite; }
   @keyframes thwait { from { background-position: 100% 0; } to { background-position: -100% 0; } }
   .clipc button { width: 100%; min-height: 42px; border-radius: 0; font-size: 15px; }
+  .pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .pick select { min-height: 44px; padding: 6px; font-size: 15px; width: 100%; }
+  .sm { min-height: 38px; padding: 6px 12px; font-size: 14px; }
+  .pnteam { padding: 10px 0; border-top: 1px solid var(--line); } .pnteam:first-child { border-top: 0; padding-top: 0; }
+  .pnhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .pnchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chip { display: inline-flex; align-items: center; border-radius: 999px; background: #262b35; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+  .chip button { min-height: 36px; padding: 4px 10px; font-size: 14px; background: transparent; border-radius: 999px; }
+  .chip input { width: 150px; }
+  .pnadd, .pnrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .pnadd input, .pnrow input, .chip input { flex: 1; min-width: 120px; font-size: 16px; padding: 8px; letter-spacing: normal; text-align: left; }
+  .pnrow { padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; } .pnrow:first-child { border-top: 0; }
+  .pnrow .acts { margin-left: auto; display: flex; gap: 4px; } .pnrow select { min-height: 38px; font-size: 14px; }
+  .new { color: #ffcc33; font-size: 13px; } .okc { color: var(--ok); }
 </style>
 </head>
 <body>
@@ -196,10 +210,21 @@
 
   <div class="card">
     <h2>Teams</h2>
+    <div class="pick"><select id="pcA"></select><select id="pcB"></select></div>
     <div class="tedit"><span class="lbl" id="tlA">Team A (left on its DEF side)</span><input class="name" id="tnA" maxlength="40" placeholder="Team name"><input class="name" id="ttA" maxlength="5" placeholder="TAG"></div>
     <div class="tedit"><span class="lbl" id="tlB">Team B</span><input class="name" id="tnB" maxlength="40" placeholder="Team name"><input class="name" id="ttB" maxlength="5" placeholder="TAG"></div>
     <div class="grid"><button id="saveA">Save team A</button><button id="saveB">Save team B</button></div>
-    <p class="muted" style="margin:8px 0 0">Logos and colors stay on the host's PC.</p>
+    <p class="muted" style="margin:8px 0 0">Pick clan fills name, tag and logo from the host's Clans. Logos and colors stay on the host's PC.</p>
+  </div>
+
+  <div class="card">
+    <h2>Player names</h2>
+    <p class="muted" style="margin:0 0 8px">Locked names: every name the screen reads is matched to the closest one. Tap a name to fix it.</p>
+    <div id="pnTeams"></div>
+    <h2 style="margin-top:14px">Names read (last minute)</h2>
+    <p class="muted" style="margin:0 0 6px">Yellow = clan player not in Clans yet: Keep (name is right) or Fix (type the right name). ✕ = hide here.</p>
+    <datalist id="pnKnown"></datalist>
+    <div id="pnSeen"></div>
   </div>
 
   <div class="card">
@@ -314,7 +339,7 @@
       $('plus' + t).textContent = `${T[t].tag} +1`; $('plus' + t).style.background = T[t].color;
       $('minus' + t).textContent = `${T[t].tag} −1`;
     }
-    drawTeams(s); drawMaps(s); drawPool(s); drawClips(s); drawGuess(s);
+    drawTeams(s); drawClanPick(s); drawNames(s); drawMaps(s); drawPool(s); drawClips(s); drawGuess(s);
     $('log').innerHTML = '';
     for (const e of s.log || []) {
       const li = document.createElement('li');
@@ -351,6 +376,122 @@
       send('Team', { team: t, name, tag }, `Team ${t}`);
     };
   }
+
+  // Pick clan + Player names (2026-10-21, user's call): the same buttons as the host's Control. Clans and names come from
+  // the host's PC; nothing here is redrawn while a box or list in it is in use.
+  const busyIn = el => el.contains(document.activeElement) && /^(INPUT|SELECT)$/.test(document.activeElement.tagName);
+  const key = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const clansSorted = s => (s.clans || []).slice().sort((a, b) => (a.tag || a.name).localeCompare(b.tag || b.name));
+  const clanOfTeam = (s, t) => { const T = s.teams[t], C = s.clans || [];
+    return C.find(c => c.tag && key(c.tag) === key(T.tag)) || C.find(c => key(c.name) && key(c.name) === key(T.name)); };
+  function drawClanPick(s) {
+    if (!s.clans || busyIn($('pcA').parentNode) || !changed('pick', [s.clans])) return;
+    for (const t of ['A', 'B']) $('pc' + t).innerHTML = `<option value="">Team ${t}: pick clan… ▾</option>`
+      + clansSorted(s).map(c => `<option value="${esc(c.id)}">${esc(c.tag || c.name)} · ${esc(c.name)} (${c.n})</option>`).join('');
+  }
+  for (const t of ['A', 'B']) $('pc' + t).addEventListener('change', e => {
+    const c = ((last && last.clans) || []).find(x => x.id === e.target.value);
+    e.target.value = ''; e.target.blur();
+    if (c && confirm(`Team ${t} = ${c.tag || c.name} (${c.name})? Name, tag and logo change; its locked names start again.`))
+      send('Pick clan', { team: t, clan: c.id }, `Team ${t}: ${c.tag || c.name}`);
+  });
+
+  let pnEdit = false, pnFix = false, pnOpenKnown = false;
+  const pnPicked = {}; // shown name -> clan id chosen in its row (kept over redraws)
+  let pnHidden = new Set(); try { pnHidden = new Set(JSON.parse(store.get('pnHidden') || '[]')); } catch {}
+  function drawNames(s) {
+    if (!s.roster || !s.teams) return;
+    const all = [...new Set([...(s.known || []), ...(s.roster.A || []), ...(s.roster.B || [])])].sort((a, b) => a.localeCompare(b)), ks = all.join('|');
+    if ($('pnKnown')._ks !== ks) { $('pnKnown')._ks = ks; $('pnKnown').innerHTML = all.map(n => `<option value="${esc(n)}">`).join(''); }
+    if (!pnEdit && !busyIn($('pnTeams')) && changed('pnTeams', [s.roster, s.teams, s.clans])) $('pnTeams').innerHTML = ['A', 'B'].map(t => {
+      const T = s.teams[t], R = s.roster[t] || [], cl = clanOfTeam(s, t);
+      return `<div class="pnteam" data-team="${t}">
+        <div class="pnhead"><b>${esc(T.tag)} <span class="muted">${esc(T.name)}</span></b><button class="sm" data-pn="clear"${R.length ? '' : ' disabled'}>Clear</button></div>
+        <div class="muted">${cl ? `Clan ${esc(cl.tag || cl.name)}: ${cl.n} known players` : 'No clan with this tag or name in Clans yet.'}</div>
+        <div class="pnchips">${R.map(n => `<span class="chip"><button data-pn="edit" data-n="${esc(n)}" title="Tap to fix this name">${esc(n)}</button><button data-pn="del" data-n="${esc(n)}" title="Remove">✕</button></span>`).join('') || '<span class="muted">No names yet</span>'}</div>
+        <div class="pnadd"><input maxlength="24" list="pnKnown" placeholder="Add a name, e.g. BTK.Johan"><button class="sm" data-pn="add">Add</button>${R.length && !/^TM[AB]$/.test(T.tag) ? '<button class="sm" data-pn="toclan">Save to clan</button>' : ''}</div></div>`;
+    }).join('');
+    drawSeen(s);
+  }
+  $('pnTeams').addEventListener('click', e => {
+    const b = e.target.closest('button[data-pn]'); if (!b || !last) return;
+    const t = b.closest('[data-team]').dataset.team, T = last.teams[t], op = b.dataset.pn, n = b.dataset.n;
+    const redraw = () => { pnEdit = false; sig.pnTeams = null; drawNames(last); };
+    if (op === 'edit') {
+      pnEdit = true;
+      const chip = b.closest('.chip');
+      chip.innerHTML = `<input maxlength="24" list="pnKnown" value="${esc(n)}"><button data-pn="editok" data-n="${esc(n)}">✓</button><button data-pn="editno">✕</button>`;
+      const inp = chip.querySelector('input'); inp.focus(); inp.select();
+      return;
+    }
+    if (op === 'editno') return redraw();
+    if (op === 'editok') {
+      const to = b.closest('.chip').querySelector('input').value.trim();
+      if (to && to !== n) send('Roster', { team: t, op: 'edit', name: n, to }, `${n} → ${to}`);
+      return redraw();
+    }
+    if (op === 'del' && confirm(`Remove ${n} from ${T.tag}?`)) send('Roster', { team: t, op: 'del', name: n }, `Removed ${n}`);
+    if (op === 'clear' && confirm(`Clear all ${T.tag} names?`)) send('Roster', { team: t, op: 'clear' }, `${T.tag} names cleared`);
+    if (op === 'toclan') send('Roster', { team: t, op: 'toclan' }, `${T.tag} names saved to the clan`);
+    if (op === 'add') {
+      const inp = b.closest('.pnadd').querySelector('input'), v = inp.value.trim();
+      if (!v) return toast('Type a name', true);
+      inp.value = ''; inp.blur();
+      send('Roster', { team: t, op: 'add', name: v }, `Added ${v}`);
+    }
+  });
+  $('pnTeams').addEventListener('keydown', e => {
+    if (e.target.tagName !== 'INPUT') return;
+    const box = e.target.parentNode;
+    if (e.key === 'Enter') box.querySelector('[data-pn=editok],[data-pn=add]').click();
+    if (e.key === 'Escape' && box.querySelector('[data-pn=editno]')) box.querySelector('[data-pn=editno]').click();
+  });
+
+  // Names read: one row per player the screen read in the last minute. Unknown clan players: Keep / Fix / ✕;
+  // known ones fold into one line.
+  function drawSeen(s) {
+    if (pnFix || busyIn($('pnSeen'))) return;
+    const seen = (s.seen || []).filter(x => !pnHidden.has(x.shown));
+    if (!changed('pnSeen', [seen, pnOpenKnown, s.clans])) return;
+    const unknown = seen.filter(x => !x.known && x.words >= 2), known = seen.filter(x => x.known), C = clansSorted(s);
+    const row = (x, isKnown) => `<div class="pnrow" data-n="${esc(x.shown)}"><b>${esc(x.shown)}</b>
+      ${isKnown ? `<span class="muted">${x.known === 'locked' ? 'locked name' : esc(x.known)}</span>` : '<span class="new">not in Clans</span>'}
+      ${isKnown ? '' : `<select data-clan><option value="">Clan…</option>${C.map(c => `<option value="${esc(c.id)}"${c.id === (pnPicked[x.shown] || x.clan) ? ' selected' : ''}>${esc(c.tag || c.name)}</option>`).join('')}</select>`}
+      <span class="acts"><button class="sm" data-pn="fix">Fix</button>${isKnown ? '' : '<button class="sm" data-pn="keep">Keep</button>'}<button class="sm" data-pn="hide" title="Hide here">✕</button></span></div>`;
+    $('pnSeen').innerHTML = (unknown.length ? unknown.map(x => row(x, false)).join('') : '<p class="muted" style="margin:0">No unknown names. 👍</p>')
+      + (known.length ? `<button class="sm okc" data-pn="known" style="margin-top:6px;background:transparent">${pnOpenKnown ? '▾' : '▸'} ✓ ${known.length} known player${known.length > 1 ? 's' : ''} read fine</button>`
+        + (pnOpenKnown ? known.map(x => row(x, true)).join('') : '') : '');
+  }
+  $('pnSeen').addEventListener('click', e => {
+    const b = e.target.closest('button[data-pn]'); if (!b || !last) return;
+    const close = () => { pnFix = false; sig.pnSeen = null; drawSeen(last); };
+    if (b.dataset.pn === 'known') { pnOpenKnown = !pnOpenKnown; return close(); }
+    const row = b.closest('.pnrow'), n = row.dataset.n;
+    if (b.dataset.pn === 'hide') { pnHidden.add(n); store.set('pnHidden', JSON.stringify([...pnHidden].slice(-300))); return close(); }
+    if (b.dataset.pn === 'keep') {
+      const c = (last.clans || []).find(x => x.id === row.querySelector('[data-clan]').value);
+      if (!c) return toast('Pick the clan first', true);
+      return send('Keep name', { name: n, clan: c.id }, `Saved ${n} to ${c.tag || c.name}`);
+    }
+    if (b.dataset.pn === 'fix') {
+      pnFix = true;
+      row.innerHTML = `<input maxlength="24" list="pnKnown" value="${esc(n)}"><button class="sm" data-pn="fixok">Save</button><button class="sm" data-pn="fixno">Cancel</button>`;
+      const inp = row.querySelector('input'); inp.focus(); inp.select();
+      return;
+    }
+    if (b.dataset.pn === 'fixno') return close();
+    if (b.dataset.pn === 'fixok') {
+      const to = row.querySelector('input').value.trim(); if (!to) return;
+      if (to !== n) send('Fix name', { name: n, to }, `Fixed: ${n} → ${to}`);
+      return close();
+    }
+  });
+  $('pnSeen').addEventListener('change', e => { const row = e.target.closest('.pnrow'); if (row && e.target.matches('[data-clan]')) pnPicked[row.dataset.n] = e.target.value; });
+  $('pnSeen').addEventListener('keydown', e => {
+    if (e.target.tagName !== 'INPUT') return;
+    if (e.key === 'Enter') e.target.parentNode.querySelector('[data-pn=fixok]').click();
+    if (e.key === 'Escape') e.target.parentNode.querySelector('[data-pn=fixno]').click();
+  });
 
   // Maps + map pool + clips: redrawn only when they change (a redraw would close an open picker).
   const sig = {};
