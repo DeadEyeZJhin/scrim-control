@@ -171,7 +171,7 @@ function blankTeam(){ return {name:'', tag:'', logo:null}; }
 function newBracket(teams){
   return { id:uid(), title:'Scrim Tournament', savedAt:Date.now(), format:'swiss', count:8,
     teams:(teams || []).map(t => ({...t})).concat(Array.from({length:Math.max(0, 8 - (teams || []).length)}, blankTeam)),
-    opt:{wins:2, losses:2, seeding:'listed', playoff:'single', third:false, reset:true, rrTwice:false, rrGroups:1, rrAdvance:2, tb:['tbm','h2h','diff','buch']},
+    opt:{wins:3, losses:3, seeding:'listed', playoff:'single', third:false, reset:true, rrTwice:false, rrGroups:1, rrAdvance:2, tb:['tbm','h2h','diff','buch']},
     results:{}, tbs:[] };
 }
 function fix(b){
