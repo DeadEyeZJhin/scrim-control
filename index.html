@@ -98,6 +98,8 @@
   .clipc .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .clipc .th span { position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 5px; background: rgba(0,0,0,.75); font-size: 12px; font-weight: 700; }
   .clipc .th .star { left: auto; right: 6px; top: 6px; bottom: auto; color: #ffcc33; }
+  .clipc .th .wait { position: absolute; inset: 0; display: grid; place-items: center; color: #8a93a6; font-size: 12px; font-style: normal; background: linear-gradient(90deg, #0b0d11, #1a1f29, #0b0d11); background-size: 200% 100%; animation: thwait 1.4s linear infinite; }
+  @keyframes thwait { from { background-position: 100% 0; } to { background-position: -100% 0; } }
   .clipc button { width: 100%; min-height: 42px; border-radius: 0; font-size: 15px; }
 </style>
 </head>
@@ -449,11 +451,12 @@ Wrong winner? Give it to ${T[o].tag}? Undo brings it back.`)) send('Wrong winner
     send('Guess pick', { kind: b.dataset.kind, key: b.dataset.key }, `Next guess ${b.dataset.name}`);
   });
 
-  // Replays: thumbnails come from Supabase (scrim_thumbs), fetched once per clip, asked again later if missing.
+  // Replays: thumbnails come from Supabase (scrim_thumbs), fetched once per clip; a missing one shows "Loading picture…"
+  // and is asked again every 4 s until it arrives (the host PC makes it a few seconds after the save).
   const thumbs = {}; let thumbAsk = 0;
   async function fetchThumbs(ids) {
     const need = ids.filter(id => !thumbs[id]);
-    if (!need.length || Date.now() - thumbAsk < 8000) return;
+    if (!need.length || Date.now() - thumbAsk < 4000) return;
     thumbAsk = Date.now();
     try {
       const r = await rpc('scrim_thumbs', { pin, ids: need.slice(0, 40) });
@@ -465,7 +468,7 @@ Wrong winner? Give it to ${T[o].tag}? Undo brings it back.`)) send('Wrong winner
     fetchThumbs(list.map(c => c.id));
     if (!changed('clips', [list, Object.keys(thumbs).length, s.teams])) return;
     const T = s.teams;
-    $('clips').innerHTML = list.length ? list.map(c => `<div class="clipc"><div class="th">${thumbs[c.id] ? `<img src="data:image/jpeg;base64,${thumbs[c.id]}" alt="">` : ''}
+    $('clips').innerHTML = list.length ? list.map(c => `<div class="clipc"><div class="th">${thumbs[c.id] ? `<img src="data:image/jpeg;base64,${thumbs[c.id]}" alt="">` : '<i class="wait">Loading picture…</i>'}
         <span>Map ${c.slot || '?'} · R${c.round}${c.team && T[c.team] ? ' · ' + esc(T[c.team].tag) : ''}</span>${c.star ? '<span class="star">★</span>' : ''}</div>
         <button data-clip="${esc(c.id)}">Play</button></div>`).join('') : '<p class="muted">No replays yet.</p>';
   }
