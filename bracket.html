@@ -37,6 +37,18 @@ input[type=number]{width:64px}
 .match .bo{position:absolute;top:-9px;right:12px;background:#07102a;border:1px solid rgba(255,255,255,.25);color:var(--muted);font-size:10px;font-weight:900;letter-spacing:1.5px;padding:1px 7px;border-radius:6px}
 .match .bo.big{border-color:var(--gold);color:var(--gold)}
 .match .bo.fin{background:var(--gold);color:#1a1000;border-color:var(--gold)}
+/* LIVE NOW / ONGOING (user 2026-10-28): click a match box (not ✔ ✖ or the score) for the menu */
+.match.pick{cursor:pointer}.match.pick:hover{box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.match.st-live{border-color:#ff3b57;box-shadow:0 0 0 2px #ff3b57,0 0 22px rgba(255,59,87,.55)}
+.match.st-play{border-color:#ffb020;box-shadow:0 0 0 1.5px #ffb020,0 0 14px rgba(255,176,32,.35)}
+.match .stb{position:absolute;top:-10px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:900;letter-spacing:1.5px;padding:1px 8px;border-radius:6px}
+.match .stb.live{background:#ff3b57;color:#fff;animation:livePulse 1.4s ease-in-out infinite}.match .stb.play{background:#ffb020;color:#1a1000}
+.match .stb.live::before{content:'';display:inline-block;width:6px;height:6px;margin-right:5px;border-radius:50%;background:#fff;vertical-align:1px}
+@keyframes livePulse{50%{opacity:.6}}
+.mmenu{position:fixed;z-index:55;min-width:230px;background:#0d1a38;border:1px solid var(--blue);border-radius:12px;padding:8px;box-shadow:0 14px 40px rgba(0,0,0,.7);display:flex;flex-direction:column;gap:6px}
+.mmenu .mh{font-size:12px;font-weight:800;letter-spacing:1px;color:var(--muted);padding:2px 4px 4px}
+.mmenu button{text-align:left}.mmenu button.on{outline:2px solid #fff}
+.mmenu .note{padding:2px 4px}
 
 /* ---------- settings + teams panel ---------- */
 .panel{max-width:1400px;margin:14px auto 0;padding:0 16px}
@@ -123,7 +135,7 @@ svg.arrows circle.w{fill:var(--green)}svg.arrows circle.l{fill:var(--red)}svg.ar
 /* 3rd place match (TODO 32): under the Final in its column, played before it (lower match number) */
 .finbox{position:relative}
 .thirdbox{position:absolute;top:100%;left:0;right:0;margin-top:22px}
-.thirdbox .colh{margin:0 0 4px}
+.thirdbox .colh{margin:0 0 14px}
 .tree.has3rd{padding-bottom:150px}
 .logo{width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.04));font-weight:900;font-size:14px;color:#cfe0ff}
 .logo img{width:100%;height:100%;object-fit:contain}
@@ -205,6 +217,7 @@ function fix(b){
   if(!FORMATS[b.format]) b.format = 'swiss';
   if(!b.results || typeof b.results !== 'object') b.results = {};
   if(!Array.isArray(b.tbs)) b.tbs = [];
+  if(!b.live || typeof b.live !== 'object') b.live = {};
   return b;
 }
 let S;
@@ -482,9 +495,67 @@ function boOf(B, m){
 function matchEl(B, m){
   const bye = m.a === BYE || m.b === BYE, bo = boOf(B, m);
   const card = h('div', {class:'match' + (bye ? ' bye' : ''), 'data-id':m.id}, h('span', {class:'mid'}, m.label + (m.rec ? ' · ' + m.rec : '')),
+    stOf(B, m) ? h('span', {class:'stb ' + stOf(B, m)}, stOf(B, m) === 'live' ? 'LIVE NOW' : '⚔ ONGOING') : null,
     bye ? null : h('span', {class:'bo' + (bo > 1 ? ' big' : '') + (m.kind === 'final' ? ' fin' : ''), title:m.dec || m.tb ? 'A team can qualify or be eliminated in this match' : ''}, 'BO' + bo),
     h('div', {class:'slots'}, slotEl(B, m, 0), h('div', {class:'vs'}, 'VS'), slotEl(B, m, 1)));
+  if(canPick(m)){
+    card.classList.add('pick'); if(stOf(B, m)) card.classList.add('st-' + stOf(B, m));
+    card.title = 'Click: LIVE NOW / ONGOING';
+    card.addEventListener('click', e => { if(e.target.closest('.acts,input,button,a')) return; matchMenu(B, m, e); });
+  }
   m.card = card; return card;
+}
+// LIVE NOW = on stream (one at a time); ONGOING = played now in another room, not broadcast. Gone once the match has a winner.
+const canPick = m => m.a != null && m.b != null && m.a !== BYE && m.b !== BYE && m.o.w == null;
+const stOf = (B, m) => canPick(m) && B.live && B.live[m.id] || null;
+function matchMenu(B, m, e){
+  document.querySelectorAll('.mmenu').forEach(x => x.remove());
+  const st = stOf(B, m), bo = boOf(B, m), close = () => { menu.remove(); removeEventListener('pointerdown', away, true); removeEventListener('keydown', esc); };
+  const away = ev => { if(!menu.contains(ev.target)) close(); }, esc = ev => { if(ev.key === 'Escape') close(); };
+  const pickSt = async v => { close(); setLive(B, m, st === v ? null : v); if(v === 'live' && st !== 'live' && SERVED) await toControl(B, m, bo); };
+  const menu = h('div', {class:'mmenu'}, h('div', {class:'mh'}, m.label + ' · ' + tname(B, m.a) + ' vs ' + tname(B, m.b) + ' · BO' + bo),
+    h('button', {class:'btn' + (st === 'live' ? ' on' : ''), type:'button', onclick:() => pickSt('live')}, '🔴 LIVE NOW', h('small', {class:'note'}, SERVED ? ' on stream · sets Scrim Control' : ' on stream')),
+    h('button', {class:'btn' + (st === 'play' ? ' on' : ''), type:'button', onclick:() => pickSt('play')}, '⚔ ONGOING', h('small', {class:'note'}, ' playing, not on stream')),
+    st ? h('button', {class:'btn', type:'button', onclick:() => pickSt(null)}, '✕ Not playing') : null);
+  document.body.append(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, e.clientX + 6)) + 'px';
+  menu.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, e.clientY + 6)) + 'px';
+  setTimeout(() => { addEventListener('pointerdown', away, true); addEventListener('keydown', esc); });
+}
+function setLive(B, m, v){
+  B.live = B.live || {};
+  if(v === 'live') Object.keys(B.live).forEach(k => { if(B.live[k] === 'live') delete B.live[k]; }); // one match on stream at a time
+  if(v) B.live[m.id] = v; else delete B.live[m.id];
+  touch(); renderBracket();
+}
+// LIVE NOW on this PC: Scrim Control's Teams (A = top team, B = bottom team; logo from the Clans list) and Mode = this
+// match's Bo. Then asks whether to start a New series (all maps 0 – 0). Every step can be undone in Scrim Control.
+function controlAct(steps){
+  return new Promise((ok, no) => {
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws');
+    let i = 0, started = false; const t = setTimeout(() => { ws.close(); no(new Error('Scrim Overlay did not answer')); }, 8000);
+    const next = () => { if(i >= steps.length){ clearTimeout(t); ws.close(); return ok(); } const [action, payload] = steps[i]; ws.send(JSON.stringify({type:'action', action:action, payload:payload, id:++i})); };
+    ws.onopen = () => ws.send(JSON.stringify({type:'hello', channel:'live', role:'control'}));
+    ws.onmessage = e => { const msg = JSON.parse(e.data);
+      if(msg.type === 'state' && !started){ started = true; next(); }
+      else if(msg.type === 'result'){ if(!msg.ok){ clearTimeout(t); ws.close(); return no(new Error(msg.error)); } next(); } };
+    ws.onerror = () => { clearTimeout(t); no(new Error('Scrim Overlay is not running')); };
+  });
+}
+async function toControl(B, m, bo){
+  const key = s => (s || '').trim().toUpperCase();
+  const team = s => { const t = B.teams[s] || {}, nm = tname(B, s);
+    const c = CLANS.find(c => t.tag && key(c.tag) === key(t.tag)) || CLANS.find(c => key(c.name) === key(nm)) || CLANS.find(c => key(c.tag) === key(nm));
+    return c ? {name:c.name || nm, tag:c.tag || (c.name || nm).slice(0, 5), logo:c.logo || null, clan:true} : {name:nm, tag:t.tag || nm.slice(0, 5), logo:null}; };
+  const A = team(m.a), Bt = team(m.b);
+  try{
+    await controlAct([['match/setTeam', {team:'A', name:A.name, tag:A.tag, logo:A.logo}], ['match/setTeam', {team:'B', name:Bt.name, tag:Bt.tag, logo:Bt.logo}], ['match/setMode', {mode:'bo' + bo}]]);
+  }catch(err){ toast('Scrim Control not changed: ' + err.message); return; }
+  const miss = [A, Bt].filter(x => !x.clan).map(x => x.name);
+  toast('Scrim Control: ' + A.tag + ' vs ' + Bt.tag + ' · BO' + bo + (miss.length ? ' · not in Clans (no logo): ' + miss.join(', ') : ''));
+  if(await dialog(A.name + ' vs ' + Bt.name + ' is set in Scrim Control (Teams + Bo' + bo + ').\n\nAlso start a New series (all maps 0 – 0, old MVPs, picks and clips cleared)?', {yes:'Yes, New series', no:'No, keep the scores'}))
+    controlAct([['match/newSeries', {}]]).then(() => toast('New series: all maps 0 – 0.'), err => toast('New series failed: ' + err.message));
 }
 function treeLinks(ms){ ms.forEach(m => [['srcA', 0], ['srcB', 1]].forEach(([k, side]) => { const src = m[k]; if(!src || !src.card) return;
   const dec = src.o.w != null && src.o.w !== BYE;
