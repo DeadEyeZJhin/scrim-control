@@ -505,10 +505,10 @@ function matchEl(B, m){
   }
   m.card = card; return card;
 }
-// LIVE NOW = on stream (one at a time); ONGOING = played now in another room, not broadcast. Every match box but a BYE
-// (user 2026-10-28: Swiss above all, also one that already has a winner or still waits for its teams). Pressing ✔ / ✖ or
+// LIVE NOW = on stream (one at a time); ONGOING = played now in another room, not broadcast. Only a match whose two teams
+// are known and that has no winner yet (user 2026-10-28, after trying "every box": back to this). Pressing ✔ / ✖ or
 // typing a score that gives the match a winner removes the mark (clearLive).
-const canPick = m => m.a !== BYE && m.b !== BYE;
+const canPick = m => m.a != null && m.b != null && m.a !== BYE && m.b !== BYE && m.o.w == null;
 const stOf = (B, m) => canPick(m) && B.live && B.live[m.id] || null;
 const clearLive = (B, m, r) => { if(r && r.w != null && B.live) delete B.live[m.id]; };
 const sideName = (B, m, sd) => { const s = sd ? m.b : m.a; return s == null ? (sd ? m.hb : m.ha) : tname(B, s); };
