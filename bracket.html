@@ -461,7 +461,7 @@ let links = [], stage, svg;
 function setResult(B, m, seat, win){
   if(m.a == null || m.b == null || m.a === BYE || m.b === BYE) return;
   const target = win ? seat : (seat === m.a ? m.b : m.a), r = B.results[m.id] || {s:{}};
-  r.w = (r.w === target) ? undefined : target;
+  r.w = (r.w === target) ? undefined : target; clearLive(B, m, r);
   if(r.w === undefined && !Object.keys(r.s || {}).length) delete B.results[m.id]; else B.results[m.id] = r;
   touch(); renderBracket();
 }
@@ -469,7 +469,7 @@ function setScore(B, m, seat, v){
   const r = B.results[m.id] || {s:{}}; r.s = r.s || {};
   if(num(v) == null) delete r.s[seat]; else r.s[seat] = Math.max(0, Math.min(99, Math.round(+v)));
   const sa = num(r.s[m.a]), sb = num(r.s[m.b]);
-  if(sa != null && sb != null && sa !== sb) r.w = sa > sb ? m.a : m.b;
+  if(sa != null && sb != null && sa !== sb){ r.w = sa > sb ? m.a : m.b; clearLive(B, m, r); }
   B.results[m.id] = r; touch(); renderBracket();
 }
 function slotEl(B, m, side){
@@ -505,15 +505,20 @@ function matchEl(B, m){
   }
   m.card = card; return card;
 }
-// LIVE NOW = on stream (one at a time); ONGOING = played now in another room, not broadcast. Gone once the match has a winner.
-const canPick = m => m.a != null && m.b != null && m.a !== BYE && m.b !== BYE && m.o.w == null;
+// LIVE NOW = on stream (one at a time); ONGOING = played now in another room, not broadcast. Every match box but a BYE
+// (user 2026-10-28: Swiss above all, also one that already has a winner or still waits for its teams). Pressing ✔ / ✖ or
+// typing a score that gives the match a winner removes the mark (clearLive).
+const canPick = m => m.a !== BYE && m.b !== BYE;
 const stOf = (B, m) => canPick(m) && B.live && B.live[m.id] || null;
+const clearLive = (B, m, r) => { if(r && r.w != null && B.live) delete B.live[m.id]; };
+const sideName = (B, m, sd) => { const s = sd ? m.b : m.a; return s == null ? (sd ? m.hb : m.ha) : tname(B, s); };
 function matchMenu(B, m, e){
   document.querySelectorAll('.mmenu').forEach(x => x.remove());
   const st = stOf(B, m), bo = boOf(B, m), close = () => { menu.remove(); removeEventListener('pointerdown', away, true); removeEventListener('keydown', esc); };
   const away = ev => { if(!menu.contains(ev.target)) close(); }, esc = ev => { if(ev.key === 'Escape') close(); };
-  const pickSt = async v => { close(); setLive(B, m, st === v ? null : v); if(v === 'live' && st !== 'live' && SERVED) await toControl(B, m, bo); };
-  const menu = h('div', {class:'mmenu'}, h('div', {class:'mh'}, m.label + ' · ' + tname(B, m.a) + ' vs ' + tname(B, m.b) + ' · BO' + bo),
+  const pickSt = async v => { close(); setLive(B, m, st === v ? null : v);
+    if(v === 'live' && st !== 'live' && SERVED){ if(m.a == null || m.b == null) toast('Marked LIVE NOW. Scrim Control not changed: the teams of ' + m.label + ' are not known yet.'); else await toControl(B, m, bo); } };
+  const menu = h('div', {class:'mmenu'}, h('div', {class:'mh'}, m.label + ' · ' + sideName(B, m, 0) + ' vs ' + sideName(B, m, 1) + ' · BO' + bo),
     h('button', {class:'btn' + (st === 'live' ? ' on' : ''), type:'button', onclick:() => pickSt('live')}, '🔴 LIVE NOW', h('small', {class:'note'}, SERVED ? ' on stream · sets Scrim Control' : ' on stream')),
     h('button', {class:'btn' + (st === 'play' ? ' on' : ''), type:'button', onclick:() => pickSt('play')}, '⚔ ONGOING', h('small', {class:'note'}, ' playing, not on stream')),
     st ? h('button', {class:'btn', type:'button', onclick:() => pickSt(null)}, '✕ Not playing') : null);
