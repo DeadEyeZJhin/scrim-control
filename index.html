@@ -78,6 +78,7 @@
   .maprow .mb .flip { grid-column: 1 / -1; background: #5a4300; border-color: #a57c00; color: #ffe08a; font-weight: 700; }
   .maprow .warnline { grid-column: 1 / -1; color: #ff8a80; font-weight: 700; font-size: 14px; }
   select { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: #262b35; color: var(--text); }
+  .bkon { outline: 3px solid #ff4d5e; outline-offset: -3px; }
   .ggrow { grid-column: span 2; display: flex; gap: 8px; } .ggrow [data-cmd] { flex: 1; } #ggSet { flex: 0 0 64px; font-size: 22px; }
   #ggSet.on { box-shadow: inset 0 0 0 2px #ffd23f; }
   #ggPick { grid-column: span 2; } #ggPick h3 { margin: 10px 0 6px; font-size: 13px; text-transform: uppercase; opacity: .75; }
@@ -197,6 +198,8 @@
       <button class="big" data-cmd="Highlights">Highlights</button>
       <button class="big" data-cmd="Play replay">Play replay</button>
       <button class="big" data-cmd="Save replay">Save replay</button>
+      <button class="big" data-cmd="Bracket Swiss" id="bkSwiss" title="Shows the Swiss bracket full screen. Press again to hide it.">Bracket Swiss</button>
+      <button class="big" data-cmd="Bracket Playoffs" id="bkPo" title="Shows the playoffs bracket full screen. Press again to hide it.">Bracket Playoffs</button>
       <div class="ggrow"><button class="big" data-cmd="Guess Game on/off">Guess Game on/off</button><button class="big" id="ggSet" title="Choose the next Runner or Map to guess">⚙</button></div>
       <div id="ggPick" hidden>
         <div class="ggnow"><span id="ggNow">Next guess: random</span><button id="ggClear" hidden>✕ Clear</button></div>
@@ -373,6 +376,10 @@
     $('mapLine').textContent = m ? `Map ${m.slot}: ${m.name} · Maps won ${T.A.tag} ${s.won.A} – ${s.won.B} ${T.B.tag}` + (s.delaySec ? ` · stream delay ${s.delaySec}s` : '') : '—';
     $('onScreen').textContent = s.onScreen || 'nothing';
     $('sbBtn').textContent = s.scoreboard ? 'Scoreboard: ON' : 'Scoreboard: OFF';
+    // Bracket (batch 18): which view is on stream (or waiting to come back after a Map Winner / Replay / Recap).
+    const bk = s.bracket || {};
+    [['bkSwiss', 'swiss', 'Bracket Swiss'], ['bkPo', 'playoffs', 'Bracket Playoffs']].forEach(([id, v, name]) => {
+      const on = bk.on === v; $(id).classList.toggle('bkon', on); $(id).textContent = on ? name + (bk.back ? ' · waiting' : ' · ON') : name; });
     for (const t of ['A', 'B']) {
       $('plus' + t).textContent = `${T[t].tag} +1`; $('plus' + t).style.background = T[t].color;
       $('minus' + t).textContent = `${T[t].tag} −1`;
