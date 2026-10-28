@@ -342,8 +342,8 @@ async function push(){
       // A logo the PC refuses (too big / not a picture) is skipped, so it never blocks the bracket itself.
       let r; try{ r = await T.logo(k, S.logos[k]); }catch(e){ if(!/picture/.test(e.message)) throw e; r = {bad:true}; }
       if(r.ok) srvLogos.add(k); else if(r.bad || r.error){ srvLogos.add(k); toast('One logo was not taken (too big or not a picture). The bracket is saved without it.'); } }
-    const d = await T.save({base:REV, cur:S.cur, list:S.list, touched:touchedNow(), client:CLIENT});
-    pushedEdits = at;
+    const gone = GONE.slice(), d = await T.save({base:REV, cur:S.cur, list:S.list, touched:touchedNow(), client:CLIENT, gone});
+    pushedEdits = at; GONE = GONE.filter(id => !gone.includes(id));
     if(!d){ status('✓ Sent to ' + WHERE + ' ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})); return; } // co-host: comes back as a new rev
     if(d.refused && d.refused.length) toast(d.refused.join(', ') + ': changed by someone else a moment ago. Check it.');
     if(edits === at && !again) await adopt(d); // newer edits on this page meanwhile: the next push sends them
@@ -1182,6 +1182,17 @@ async function newFrom(copyResults){
   if(!copyResults){ nb.results = {}; nb.tbs = []; }
   S.list.push(nb); S.cur = nb.id; touch(); renderAll();
 }
+// 🗑 Delete (user 2026-10-28). Synced pages send the id as `gone`: the PC removes it for every page and co-host and
+// remembers it, so an older list cannot bring it back. Its copies stay in data\bracket\old. Last one = a fresh blank one.
+let GONE = [];
+async function delBracket(){
+  const B = cur();
+  if(!await dialog('Delete "' + (B.title || 'Untitled') + ' · ' + FORMATS[B.format] + '"?\nIts teams, results and settings go away' + (SYNC ? ' for everyone.' : '.'), {yes:'Delete', no:'Cancel'})) return;
+  const at = S.list.indexOf(B); S.list.splice(at, 1); GONE.push(B.id);
+  if(!S.list.length) S.list.push(newBracket());
+  S.cur = S.list[Math.min(at, S.list.length - 1)].id; selSeat = -1;
+  touch(); renderAll(); toast('Deleted "' + (B.title || 'Untitled') + '".');
+}
 function exportHTML(){
   const B = cur(), logos = {}; B.teams.forEach(t => { if(t.logo && S.logos[t.logo]) logos[t.logo] = S.logos[t.logo]; });
   const payload = {v:2, stamp:uid(), savedAt:Date.now(), bracket:B, logos:logos};
@@ -1224,6 +1235,7 @@ function build(){
       h('button', {class:'btn', type:'button', title:'Start a new bracket with the same teams (this one stays saved)', onclick:() => newFrom(false)}, '+ New bracket'),
       h('button', {class:'btn', type:'button', title:'Copy this bracket with its results', onclick:() => newFrom(true)}, '⧉ Duplicate'),
       h('button', {class:'btn', type:'button', title:'Change the order of your brackets (drag them, or use ↑ ↓)', onclick:orderDialog}, '⇅ Order'),
+      h('button', {class:'btn', type:'button', title:'Delete this bracket (teams, results, everything in it)', onclick:delBracket}, '🗑 Delete'),
       h('span', {class:'sp'}),
       h('button', {class:'btn primary', type:'button', title:'Downloads one .html file with this bracket inside, to send to friends', onclick:exportHTML}, '💾 Save & Share (.html)'),
       h('button', {class:'btn', type:'button', title:'Load a shared bracket file (also the old Swiss Bracket file: its teams + logos)', onclick:() => $('#imp').click()}, 'Import file'),
