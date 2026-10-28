@@ -344,7 +344,14 @@ async function push(){
     if(d.refused && d.refused.length) toast(d.refused.join(', ') + ': changed by someone else a moment ago. Check it.');
     if(edits === at && !again) await adopt(d); // newer edits on this page meanwhile: the next push sends them
     else { REV = d.rev; srvLogos = new Set(d.logos || []); }
-  }catch(e){ mark('pending', '1'); status('⚠ ' + WHERE + ' did not get it (' + e.message + '): kept in this browser', true); }
+  }catch(e){
+    // PC offline / Remote OFF / too fast / no internet: kept here and sent again in 5 s. Anything else (refused for good):
+    // dropped, so this page takes the host's copy again instead of standing still until a refresh (user 2026-10-28).
+    if(/offline|remote|too fast|not answering|fetch|network|server 5|abort/i.test(e.message)){
+      mark('pending', '1'); status('⚠ ' + WHERE + ' did not get it (' + e.message + '): kept in this browser, trying again', true);
+      clearTimeout(push.retry); push.retry = setTimeout(push, 5000);
+    } else { pushedEdits = edits; mark('pending', null); toast('Not saved (' + e.message + '). Showing the current bracket again.'); }
+  }
   finally{ inFlight = false; if(again) push(); }
 }
 // Typing, the LIVE NOW menu or a Yes/No window open: a fresh copy waits (it would redraw under them). So do edits not sent yet.
@@ -373,6 +380,8 @@ async function syncStart(){
   else if(marked('pending')){ REV = +(marked('rev') || 0); BASE = {}; await push(); }
   else await adopt(d);
   setInterval(poll, HOST ? 2000 : 1000);
+  // A background tab is checked about once a minute by the browser: coming back to it fetches the newest copy at once.
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) poll(); });
 }
 // Co-host bar: who you are, connection, "On stream" Swiss / Playoffs (same as the host's buttons), back to the free tool.
 function hostBar(ok, on, back, why){
