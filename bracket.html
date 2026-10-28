@@ -167,6 +167,10 @@ table.st tr.e td:first-child{box-shadow:inset 3px 0 var(--red)}
 .modal .box{background:#0d1a38;border:1px solid var(--blue);border-radius:14px;padding:18px 20px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.7)}
 .modal p{margin:0 0 14px;white-space:pre-line;line-height:1.5;font-size:15px}
 .modal input{width:100%;margin-bottom:14px}
+/* ⇅ Order window (user 2026-10-28): drag a row or use its arrows */
+.olist{display:grid;gap:6px;margin:0 0 14px;max-height:55vh;overflow:auto}
+.orow{display:flex;align-items:center;gap:8px;padding:8px 10px;touch-action:none;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.04);cursor:grab;user-select:none}
+.orow.drag{opacity:.45;border-style:dashed}.orow b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.orow .grip{opacity:.6;font-size:18px}.orow.cur{border-color:var(--blue)}
 .mrow{display:flex;gap:8px;justify-content:flex-end}
 .btn.trash{padding:3px 7px}
 .filebar{max-width:1400px;margin:10px auto 0;padding:10px 14px;border:1px solid #ffb347;border-radius:12px;background:rgba(255,179,71,.08);color:#ffd59a;font-size:13.5px;text-align:center}
@@ -1138,6 +1142,35 @@ async function shuffle(){
 }
 
 /* ================= brackets list, share, import ================= */
+// ⇅ Order (user 2026-10-28): the bracket list in the order you want, by dragging a row (mouse / pen / finger) or with
+// its ↑ ↓ arrows. Saved like any change, so every PC tab, the Bracket-Control card and the co-hosts get the same order.
+function orderDialog(){
+  let order = S.list.slice(), dragged = null;
+  const list = h('div', {class:'olist'});
+  const draw = () => { list.innerHTML = ''; order.forEach((b, i) => {
+    const row = h('div', {class:'orow' + (b.id === S.cur ? ' cur' : ''), 'data-i':i},
+      h('span', {class:'grip'}, '⠿'), h('b', {}, (b.title || 'Untitled') + ' · ' + FORMATS[b.format]),
+      h('button', {class:'btn sm', type:'button', title:'Up', disabled:!i, onclick:() => move(i, i - 1)}, '↑'),
+      h('button', {class:'btn sm', type:'button', title:'Down', disabled:i === order.length - 1, onclick:() => move(i, i + 1)}, '↓'));
+    // Drag: the row itself moves between the others (it keeps the pointer), the arrows are redrawn on release.
+    row.addEventListener('pointerdown', e => { if(e.target.closest('button')) return; dragged = row; row.classList.add('drag'); row.setPointerCapture(e.pointerId); });
+    row.addEventListener('pointermove', e => { if(dragged !== row) return;
+      const over = document.elementsFromPoint(e.clientX, e.clientY).map(x => x.closest && x.closest('.orow')).find(x => x && x !== row && list.contains(x));
+      if(!over) return;
+      const rows = [...list.children], i = rows.indexOf(row), j = rows.indexOf(over);
+      const [b] = order.splice(i, 1); order.splice(j, 0, b);
+      list.insertBefore(row, j > i ? over.nextSibling : over); });
+    const end = () => { if(dragged !== row) return; dragged = null; draw(); };
+    row.addEventListener('pointerup', end); row.addEventListener('pointercancel', end);
+    list.append(row); }); };
+  const move = (i, j) => { if(j < 0 || j >= order.length || i === j) return; const [b] = order.splice(i, 1); order.splice(j, 0, b); draw(); };
+  draw();
+  const ov = h('div', {class:'modal', onclick:e => { if(e.target === ov) ov.remove(); }}, h('div', {class:'box'}, h('p', {}, 'Bracket order: drag a bracket, or use ↑ ↓.'), list,
+    h('div', {class:'mrow'}, h('button', {class:'btn primary', type:'button', onclick:() => { ov.remove();
+      if(order.map(b => b.id).join() === S.list.map(b => b.id).join()) return;
+      S.list = order; touch(); renderList(); toast('Order saved.'); }}, 'Save order'), h('button', {class:'btn', type:'button', onclick:() => ov.remove()}, 'Cancel'))));
+  document.body.append(ov);
+}
 function renderList(){
   const s = $('#which'); s.innerHTML = '';
   S.list.forEach(b => s.append(h('option', {value:b.id, selected:b.id === S.cur}, (b.title || 'Untitled') + ' · ' + FORMATS[b.format])));
@@ -1190,6 +1223,7 @@ function build(){
       h('select', {id:'which', title:'Your saved brackets', onchange:e => { S.cur = e.target.value; selSeat = -1; save(); renderAll(); }}),
       h('button', {class:'btn', type:'button', title:'Start a new bracket with the same teams (this one stays saved)', onclick:() => newFrom(false)}, '+ New bracket'),
       h('button', {class:'btn', type:'button', title:'Copy this bracket with its results', onclick:() => newFrom(true)}, '⧉ Duplicate'),
+      h('button', {class:'btn', type:'button', title:'Change the order of your brackets (drag them, or use ↑ ↓)', onclick:orderDialog}, '⇅ Order'),
       h('span', {class:'sp'}),
       h('button', {class:'btn primary', type:'button', title:'Downloads one .html file with this bracket inside, to send to friends', onclick:exportHTML}, '💾 Save & Share (.html)'),
       h('button', {class:'btn', type:'button', title:'Load a shared bracket file (also the old Swiss Bracket file: its teams + logos)', onclick:() => $('#imp').click()}, 'Import file'),
